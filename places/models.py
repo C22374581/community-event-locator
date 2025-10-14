@@ -1,24 +1,28 @@
 from django.contrib.gis.db import models
+from django.contrib.postgres.indexes import GistIndex
+
 
 class Neighborhood(models.Model):
     name = models.CharField(max_length=120)
     area = models.PolygonField(srid=4326)
 
     class Meta:
-        indexes = [models.GiSTIndex(fields=['area'])]
+        indexes = [GistIndex(fields=['area'])]
 
     def __str__(self):
         return self.name
+
 
 class Route(models.Model):
     name = models.CharField(max_length=120)
     path = models.LineStringField(srid=4326)
 
     class Meta:
-        indexes = [models.GiSTIndex(fields=['path'])]
+        indexes = [GistIndex(fields=['path'])]
 
     def __str__(self):
         return self.name
+
 
 class Event(models.Model):
     title = models.CharField(max_length=140)
@@ -30,7 +34,7 @@ class Event(models.Model):
     )
 
     class Meta:
-        indexes = [models.GiSTIndex(fields=['location'])]
+        indexes = [GistIndex(fields=['location'])]
 
     def __str__(self):
         return self.title
