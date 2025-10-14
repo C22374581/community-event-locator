@@ -1,7 +1,60 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="h4 mb-3">Community Event Locator</h1>
-<p class="text-muted">Leaflet map rendering data from our Django REST API.</p>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h6">Nearby search</h2>
+        <div class="small text-muted mb-2">Click the map to set a center point.</div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Lat</label>
+          <input id="lat" class="form-control form-control-sm" value="53.3498">
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Lng</label>
+          <input id="lng" class="form-control form-control-sm" value="-6.2603">
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Radius (m)</label>
+          <input id="radius" class="form-control form-control-sm" type="number" value="1000">
+        </div>
+        <button id="btnNearby" class="btn btn-primary btn-sm w-100">Find nearby events</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h6">In neighborhood</h2>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Neighborhood</label>
+          <select id="hood" class="form-select form-select-sm"></select>
+        </div>
+        <button id="btnHood" class="btn btn-primary btn-sm w-100">Events in neighborhood</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h6">Along route</h2>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Route</label>
+          <select id="route" class="form-select form-select-sm"></select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Buffer (m)</label>
+          <input id="buffer" class="form-control form-control-sm" type="number" value="200">
+        </div>
+        <button id="btnRoute" class="btn btn-primary btn-sm w-100">Events along route</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="map" class="rounded border" style="height: 70vh;"></div>
 
@@ -19,50 +72,122 @@
 
 <script>
 (async () => {
+  // Map
   const map = L.map('map').setView([53.3498, -6.2603], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  const routeStyle = { weight: 3 };
-  const hoodStyle  = { color: '#2c7', weight: 2, fillOpacity: 0.1 };
+  // Layers
+  const eventsAllLayer = L.geoJSON(null, {
+    pointToLayer: (f, latlng) => L.marker(latlng).bindPopup(`<strong>${f.properties.title}</strong><br>${f.properties.description||''}`)
+  }).addTo(map);
 
-  const eventsLayer = L.geoJSON(null, {
-    pointToLayer: (feature, latlng) =>
-      L.marker(latlng).bindPopup(
-        `<strong>${feature.properties.title}</strong><br>${feature.properties.description || ''}`
-      )
-  });
-  const routesLayer = L.geoJSON(null, { style: routeStyle })
-    .bindPopup(layer => `<strong>${layer.feature.properties.name}</strong>`);
-  const hoodsLayer  = L.geoJSON(null, { style: hoodStyle })
-    .bindPopup(layer => `<strong>${layer.feature.properties.name}</strong>`);
+  const queryResultLayer = L.geoJSON(null, {
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius:6, weight:2 })
+      .bindPopup(`<strong>${f.properties.title}</strong><br>${f.properties.description||''}`)
+  }).addTo(map);
 
-  const [eventsRes, routesRes, hoodsRes] = await Promise.all([
-    fetch('/api/events/'),
-    fetch('/api/routes/'),
-    fetch('/api/neighborhoods/')
-  ]);
+  const routesLayer = L.geoJSON(null, { style:{ weight:3 } }).addTo(map);
+  const hoodsLayer  = L.geoJSON(null, { style:{ color:'#2c7', weight:2, fillOpacity:0.1 } }).addTo(map);
+  const centerMarker = L.marker([53.3498,-6.2603], {draggable:true}).addTo(map);
+  let centerCircle = L.circle(centerMarker.getLatLng(), {radius:1000, color:'#00f', fillOpacity:0.05}).addTo(map);
+
+  // Controls
+  const latEl = document.getElementById('lat');
+  const lngEl = document.getElementById('lng');
+  const radiusEl = document.getElementById('radius');
+  const hoodSel = document.getElementById('hood');
+  const routeSel = document.getElementById('route');
+  const bufferEl = document.getElementById('buffer');
+
+  // Load base data for context
   const [events, routes, hoods] = await Promise.all([
-    eventsRes.json(), routesRes.json(), hoodsRes.json()
+    fetch('/api/events/').then(r=>r.json()),
+    fetch('/api/routes/').then(r=>r.json()),
+    fetch('/api/neighborhoods/').then(r=>r.json())
   ]);
+  eventsAllLayer.addData(events);
+  routesLayer.addData(routes);
+  hoodsLayer.addData(hoods);
 
-  eventsLayer.addData(events).addTo(map);
-  routesLayer.addData(routes).addTo(map);
-  hoodsLayer.addData(hoods).addTo(map);
-
-  const bounds = L.latLngBounds([]);
-  [eventsLayer, routesLayer, hoodsLayer].forEach(l => {
-    if (l.getLayers().length) bounds.extend(l.getBounds());
+  // Populate selects
+  (hoods.features || []).forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.id;                    // DRF-GIS sets .id on features
+    opt.textContent = f.properties.name || `Neighborhood ${f.id}`;
+    hoodSel.appendChild(opt);
   });
-  if (bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+  (routes.features || []).forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = f.properties.name || `Route ${f.id}`;
+    routeSel.appendChild(opt);
+  });
 
+  // Map click -> set center
+  map.on('click', (e) => {
+    const {lat, lng} = e.latlng;
+    latEl.value = lat.toFixed(6);
+    lngEl.value = lng.toFixed(6);
+    centerMarker.setLatLng(e.latlng);
+    centerCircle.setLatLng(e.latlng);
+  });
+
+  // Drag marker updates inputs
+  centerMarker.on('move', () => {
+    const {lat, lng} = centerMarker.getLatLng();
+    latEl.value = lat.toFixed(6);
+    lngEl.value = lng.toFixed(6);
+    centerCircle.setLatLng(centerMarker.getLatLng());
+  });
+
+  // Radius input updates circle
+  radiusEl.addEventListener('input', () => {
+    const r = parseInt(radiusEl.value || '0', 10);
+    centerCircle.setRadius(isNaN(r) ? 0 : r);
+  });
+
+  // Query buttons
+  document.getElementById('btnNearby').addEventListener('click', async () => {
+    const lat = parseFloat(latEl.value);
+    const lng = parseFloat(lngEl.value);
+    const radius = parseInt(radiusEl.value || '1000', 10);
+    if (isNaN(lat) || isNaN(lng)) return alert('Pick a point (click on the map) or enter lat/lng.');
+    const url = `/api/events/nearby/?lat=${lat}&lng=${lng}&radius=${radius}`;
+    const fc = await fetch(url).then(r=>r.json());
+    queryResultLayer.clearLayers().addData(fc);
+    if (queryResultLayer.getLayers().length) map.fitBounds(queryResultLayer.getBounds(), {padding:[20,20]});
+  });
+
+  document.getElementById('btnHood').addEventListener('click', async () => {
+    const id = hoodSel.value;
+    if (!id) return alert('Select a neighborhood.');
+    const url = `/api/events/in_neighborhood/?neighborhood_id=${id}`;
+    const fc = await fetch(url).then(r=>r.json());
+    queryResultLayer.clearLayers().addData(fc);
+    if (queryResultLayer.getLayers().length) map.fitBounds(queryResultLayer.getBounds(), {padding:[20,20]});
+  });
+
+  document.getElementById('btnRoute').addEventListener('click', async () => {
+    const id = routeSel.value;
+    const buffer = parseInt(bufferEl.value || '200', 10);
+    if (!id) return alert('Select a route.');
+    const url = `/api/events/along_route/?route_id=${id}&buffer=${buffer}`;
+    const fc = await fetch(url).then(r=>r.json());
+    queryResultLayer.clearLayers().addData(fc);
+    if (queryResultLayer.getLayers().length) map.fitBounds(queryResultLayer.getBounds(), {padding:[20,20]});
+  });
+
+  // Layer control
   L.control.layers(null, {
-    'Events': eventsLayer,
+    'All Events (context)': eventsAllLayer,
     'Routes': routesLayer,
-    'Neighborhoods': hoodsLayer
+    'Neighborhoods': hoodsLayer,
+    'Query results': queryResultLayer
   }, { collapsed: false }).addTo(map);
 })();
 </script>
 {% endblock %}
+
