@@ -1,0 +1,12 @@
+[
+  {"model":"places.neighborhood","pk":1,
+   "fields":{"name":"City Centre",
+     "area":"SRID=4326;POLYGON((-6.28 53.34,-6.22 53.34,-6.22 53.37,-6.28 53.37,-6.28 53.34))"}},
+  {"model":"places.route","pk":1,
+   "fields":{"name":"River Walk",
+     "path":"SRID=4326;LINESTRING(-6.27 53.34,-6.25 53.35,-6.24 53.36)"}},
+  {"model":"places.event","pk":1,
+   "fields":{"title":"Food Market","description":"Local vendors",
+     "when":"2025-10-20T10:00:00Z",
+     "location":"SRID=4326;POINT(-6.258 53.349)","neighborhood":1}}
+]
