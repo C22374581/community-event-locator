@@ -56,6 +56,65 @@ class EventViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
+    @action(detail=False, methods=["get"])
+    def in_neighborhood(self, request):
+        """
+        GET /api/events/in_neighborhood/?neighborhood_id=1
+        Returns events whose location is within the given neighborhood polygon.
+        """
+        nid = request.query_params.get("neighborhood_id")
+        if not nid:
+            return Response({"detail": "neighborhood_id is required"}, status=400)
+        try:
+            nid = int(nid)
+        except ValueError:
+            return Response({"detail": "neighborhood_id must be an integer"}, status=400)
+
+        try:
+            hood = Neighborhood.objects.get(pk=nid)
+        except Neighborhood.DoesNotExist:
+            return Response({"detail": "neighborhood not found"}, status=404)
+
+        qs = self.get_queryset().filter(location__within=hood.area).order_by("id")
+        serializer = self.get_serializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def along_route(self, request):
+        """
+        GET /api/events/along_route/?route_id=1&buffer=200
+        Returns events within a buffer (meters) of the given route polyline,
+        ordered by distance to that route.
+        """
+        rid = request.query_params.get("route_id")
+        if not rid:
+            return Response({"detail": "route_id is required"}, status=400)
+        try:
+            rid = int(rid)
+        except ValueError:
+            return Response({"detail": "route_id must be an integer"}, status=400)
+
+        try:
+            route = Route.objects.get(pk=rid)
+        except Route.DoesNotExist:
+            return Response({"detail": "route not found"}, status=404)
+
+        try:
+            buf_m = float(request.query_params.get("buffer", 150))
+        except ValueError:
+            return Response({"detail": "buffer must be a number (meters)"}, status=400)
+        if buf_m <= 0 or buf_m > 100000:
+            return Response({"detail": "buffer must be between 1 and 100000 meters"}, status=400)
+
+        qs = (
+            self.get_queryset()
+            .filter(location__distance_lte=(route.path, D(m=buf_m)))
+            .annotate(distance=Distance("location", route.path))
+            .order_by("distance")
+        )
+        serializer = self.get_serializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
 
 class RouteViewSet(viewsets.ModelViewSet):
     queryset = Route.objects.all().order_by('id')
@@ -65,4 +124,5 @@ class RouteViewSet(viewsets.ModelViewSet):
 class NeighborhoodViewSet(viewsets.ModelViewSet):
     queryset = Neighborhood.objects.all().order_by('id')
     serializer_class = NeighborhoodGeoSerializer
+
 
