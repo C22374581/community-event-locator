@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Community Event Locator</h1>
+<p class="text-muted">Leaflet map rendering data from our Django REST API.</p>
+
+<div id="map" class="rounded border" style="height: 70vh;"></div>
+
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""
+/>
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+
+<script>
+(async () => {
+  const map = L.map('map').setView([53.3498, -6.2603], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  const routeStyle = { weight: 3 };
+  const hoodStyle  = { color: '#2c7', weight: 2, fillOpacity: 0.1 };
+
+  const eventsLayer = L.geoJSON(null, {
+    pointToLayer: (feature, latlng) =>
+      L.marker(latlng).bindPopup(
+        `<strong>${feature.properties.title}</strong><br>${feature.properties.description || ''}`
+      )
+  });
+  const routesLayer = L.geoJSON(null, { style: routeStyle })
+    .bindPopup(layer => `<strong>${layer.feature.properties.name}</strong>`);
+  const hoodsLayer  = L.geoJSON(null, { style: hoodStyle })
+    .bindPopup(layer => `<strong>${layer.feature.properties.name}</strong>`);
+
+  const [eventsRes, routesRes, hoodsRes] = await Promise.all([
+    fetch('/api/events/'),
+    fetch('/api/routes/'),
+    fetch('/api/neighborhoods/')
+  ]);
+  const [events, routes, hoods] = await Promise.all([
+    eventsRes.json(), routesRes.json(), hoodsRes.json()
+  ]);
+
+  eventsLayer.addData(events).addTo(map);
+  routesLayer.addData(routes).addTo(map);
+  hoodsLayer.addData(hoods).addTo(map);
+
+  const bounds = L.latLngBounds([]);
+  [eventsLayer, routesLayer, hoodsLayer].forEach(l => {
+    if (l.getLayers().length) bounds.extend(l.getBounds());
+  });
+  if (bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+
+  L.control.layers(null, {
+    'Events': eventsLayer,
+    'Routes': routesLayer,
+    'Neighborhoods': hoodsLayer
+  }, { collapsed: false }).addTo(map);
+})();
+</script>
+{% endblock %}
