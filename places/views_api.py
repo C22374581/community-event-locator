@@ -1,128 +1,107 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
-from django.contrib.gis.db.models.functions import Distance
+from django.shortcuts import get_object_or_404
 
-from .models import Event, Route, Neighborhood
+from .models import Event, Neighborhood, Route
 from .serializers import (
     EventGeoSerializer,
-    RouteGeoSerializer,
     NeighborhoodGeoSerializer,
+    RouteGeoSerializer,
 )
 
+def _as_feature_collection(data):
+    """
+    DRF-GIS GeoFeatureModelSerializer with many=True usually returns a FeatureCollection already.
+    But if we ever get a plain list of Features, wrap it so Leaflet always gets a FeatureCollection.
+    """
+    if isinstance(data, dict) and data.get("type") == "FeatureCollection":
+        return data
+    return {"type": "FeatureCollection", "features": data}
 
-class EventViewSet(viewsets.ModelViewSet):
-    queryset = Event.objects.all().order_by('id')
+class EventViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Event.objects.all()
     serializer_class = EventGeoSerializer
+
+    def _validate_latlng(self, request):
+        try:
+            lat = float(request.GET.get("lat"))
+            lng = float(request.GET.get("lng"))
+            if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+                raise ValueError
+            return lat, lng
+        except (TypeError, ValueError):
+            return None, None
 
     @action(detail=False, methods=["get"])
     def nearby(self, request):
-        """
-        GET /api/events/nearby/?lat=..&lng=..&radius=..
-        - lat/lng in WGS84
-        - radius in meters (default 1000)
-        Returns events within radius ordered by distance.
-        """
-        # lat/lng required
+        lat, lng = self._validate_latlng(request)
+        if lat is None or lng is None:
+            return Response(
+                {"error": "Invalid or missing lat/lng."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            lat = float(request.query_params.get("lat"))
-            lng = float(request.query_params.get("lng"))
-        except (TypeError, ValueError):
-            return Response({"detail": "lat and lng are required as numbers"}, status=400)
-
-        # optional radius (meters)
-        try:
-            radius = float(request.query_params.get("radius", 1000))
+            radius = float(request.GET.get("radius", 1000))
+            if radius <= 0:
+                raise ValueError
         except ValueError:
-            return Response({"detail": "radius must be a number (meters)"}, status=400)
+            return Response(
+                {"error": "Radius must be a positive number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # sanity checks
-        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            return Response({"detail": "lat/lng out of range"}, status=400)
-        if radius <= 0 or radius > 50000:
-            return Response({"detail": "radius must be between 1 and 50000 meters"}, status=400)
-
-        center = Point(lng, lat, srid=4326)
-
-        qs = (
-            self.get_queryset()
-            .annotate(distance=Distance("location", center))
-            .filter(location__distance_lte=(center, D(m=radius)))
-            .order_by("distance")
-        )
-        serializer = self.get_serializer(qs, many=True, context={"request": request})
-        return Response(serializer.data)
+        user_location = Point(lng, lat, srid=4326)
+        qs = Event.objects.filter(location__distance_lte=(user_location, D(m=radius)))
+        ser = self.get_serializer(qs, many=True)
+        return Response(_as_feature_collection(ser.data))
 
     @action(detail=False, methods=["get"])
     def in_neighborhood(self, request):
-        """
-        GET /api/events/in_neighborhood/?neighborhood_id=1
-        Returns events whose location is within the given neighborhood polygon.
-        """
-        nid = request.query_params.get("neighborhood_id")
-        if not nid:
-            return Response({"detail": "neighborhood_id is required"}, status=400)
-        try:
-            nid = int(nid)
-        except ValueError:
-            return Response({"detail": "neighborhood_id must be an integer"}, status=400)
-
-        try:
-            hood = Neighborhood.objects.get(pk=nid)
-        except Neighborhood.DoesNotExist:
-            return Response({"detail": "neighborhood not found"}, status=404)
-
-        qs = self.get_queryset().filter(location__within=hood.area).order_by("id")
-        serializer = self.get_serializer(qs, many=True, context={"request": request})
-        return Response(serializer.data)
+        hood_id = request.GET.get("neighborhood_id")
+        if not hood_id:
+            return Response(
+                {"error": "Missing neighborhood_id parameter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        neighborhood = get_object_or_404(Neighborhood, id=hood_id)
+        qs = Event.objects.filter(location__within=neighborhood.geom)
+        ser = self.get_serializer(qs, many=True)
+        return Response(_as_feature_collection(ser.data))
 
     @action(detail=False, methods=["get"])
     def along_route(self, request):
-        """
-        GET /api/events/along_route/?route_id=1&buffer=200
-        Returns events within a buffer (meters) of the given route polyline,
-        ordered by distance to that route.
-        """
-        rid = request.query_params.get("route_id")
-        if not rid:
-            return Response({"detail": "route_id is required"}, status=400)
+        route_id = request.GET.get("route_id")
+        if not route_id:
+            return Response(
+                {"error": "Missing route_id parameter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            rid = int(rid)
+            buffer_dist = float(request.GET.get("buffer", 200))
+            if buffer_dist <= 0:
+                raise ValueError
         except ValueError:
-            return Response({"detail": "route_id must be an integer"}, status=400)
+            return Response(
+                {"error": "Buffer distance must be a positive number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        try:
-            route = Route.objects.get(pk=rid)
-        except Route.DoesNotExist:
-            return Response({"detail": "route not found"}, status=404)
-
-        try:
-            buf_m = float(request.query_params.get("buffer", 150))
-        except ValueError:
-            return Response({"detail": "buffer must be a number (meters)"}, status=400)
-        if buf_m <= 0 or buf_m > 100000:
-            return Response({"detail": "buffer must be between 1 and 100000 meters"}, status=400)
-
-        qs = (
-            self.get_queryset()
-            .filter(location__distance_lte=(route.path, D(m=buf_m)))
-            .annotate(distance=Distance("location", route.path))
-            .order_by("distance")
-        )
-        serializer = self.get_serializer(qs, many=True, context={"request": request})
-        return Response(serializer.data)
+        route = get_object_or_404(Route, id=route_id)
+        # crude meters->degrees conversion for small buffers
+        buffered = route.geom.buffer(buffer_dist / 111000.0)
+        qs = Event.objects.filter(location__within=buffered)
+        ser = self.get_serializer(qs, many=True)
+        return Response(_as_feature_collection(ser.data))
 
 
-class RouteViewSet(viewsets.ModelViewSet):
-    queryset = Route.objects.all().order_by('id')
-    serializer_class = RouteGeoSerializer
-
-
-class NeighborhoodViewSet(viewsets.ModelViewSet):
-    queryset = Neighborhood.objects.all().order_by('id')
+class NeighborhoodViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Neighborhood.objects.all()
     serializer_class = NeighborhoodGeoSerializer
 
 
+class RouteViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Route.objects.all()
+    serializer_class = RouteGeoSerializer
