@@ -1,0 +1,84 @@
+/* Layout shell */
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 992px) {
+  .app-shell {
+    grid-template-columns: 360px 1fr;
+    gap: 1.25rem;
+    min-height: 70vh;
+  }
+}
+
+/* Sidebar “panel” */
+.panel {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 4px 20px rgba(0,0,0,.06);
+  padding: 1.25rem;
+}
+.panel .panel-title {
+  font-size: .95rem;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: .75rem;
+}
+
+/* Map surface */
+#map {
+  height: 74vh;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 4px 20px rgba(0,0,0,.06);
+  background: #f8fafc;
+}
+
+/* Toolbar “chips” */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  background: #f8f9fa;
+  border: 1px solid rgba(0,0,0,.06);
+  padding: .35rem .6rem;
+  border-radius: 999px;
+  font-size: .85rem;
+}
+
+/* Floating legend */
+.legend {
+  position: absolute;
+  right: .75rem;
+  bottom: .75rem;
+  z-index: 1000;
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 12px;
+  padding: .6rem .8rem;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 22px rgba(0,0,0,.08);
+  font-size: .9rem;
+}
+.legend .key { display:inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: .35rem; }
+.legend .key.events   { background: #0d6efd; }
+.legend .key.query    { background: #6610f2; }
+.legend .line { display:inline-block; width:18px; height:3px; background:#212529; border-radius: 2px; vertical-align: middle; }
+.legend .line.hood { background:#20c997; height:8px; opacity:.35; border-radius: 4px; }
+
+/* Loading stripe pinned under header */
+#loading {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+}
+
+/* Tight/elegant small labels */
+.form-label-sm { 
+  font-size: .85rem; 
+  color: #6c757d; 
+  margin-bottom: .25rem; 
+}

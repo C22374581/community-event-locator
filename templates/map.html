@@ -1,357 +1,110 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block title %}Map – Community Event Locator{% endblock %}
+
+{% block head %}
+  <!-- Page-specific CSS + Leaflet CSS -->
+  <link rel="stylesheet" href="{% static 'css/map.css' %}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
 {% block content %}
-<style>
-  /* Page polish */
-  .app-shell {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-  @media (min-width: 992px) {
-    .app-shell {
-      grid-template-columns: 360px 1fr;
-      gap: 1.25rem;
-      min-height: 70vh;
-    }
-  }
-
-  /* Sidebar cards */
-  .panel {
-    background: #fff;
-    border-radius: 16px;
-    border: 1px solid rgba(0,0,0,.06);
-    box-shadow: 0 4px 20px rgba(0,0,0,.06);
-  }
-  .panel .panel-title {
-    font-size: .95rem;
-    letter-spacing: .02em;
-    text-transform: uppercase;
-    color: #6c757d;
-    margin-bottom: .75rem;
-  }
-
-  /* Map surface */
-  #map {
-    height: 74vh;
-    border-radius: 16px;
-    border: 1px solid rgba(0,0,0,.06);
-    box-shadow: 0 4px 20px rgba(0,0,0,.06);
-    overflow: hidden;
-  }
-
-  /* Toolbar chips */
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .5rem;
-    background: #f8f9fa;
-    border: 1px solid rgba(0,0,0,.06);
-    padding: .35rem .6rem;
-    border-radius: 999px;
-    font-size: .85rem;
-  }
-
-  /* Floating legend */
-  .legend {
-    position: absolute;
-    right: .75rem;
-    bottom: .75rem;
-    z-index: 1000;
-    background: rgba(255,255,255,.96);
-    border: 1px solid rgba(0,0,0,.08);
-    border-radius: 12px;
-    padding: .6rem .8rem;
-    backdrop-filter: blur(6px);
-    box-shadow: 0 8px 22px rgba(0,0,0,.08);
-    font-size: .9rem;
-  }
-  .legend .key { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: .4rem; vertical-align: -2px; }
-  .legend .key.events { background: #0d6efd; }
-  .legend .key.query  { background: #6610f2; }
-  .legend .line { display:inline-block; width:18px; height:3px; background:#000; vertical-align:middle; margin-right:.4rem; border-radius:2px; }
-  .legend .line.route { background:#212529; }
-  .legend .line.hood  { background:#20c997; height:8px; opacity:.35; border:1px solid #20c997; }
-
-  /* Loading stripe */
-  #loading {
-    position: sticky;
-    top: 0;
-    z-index: 1100;
-    border-radius: 12px;
-  }
-
-  /* Make form labels tight + elegant */
-  .form-label-sm { font-size: .8rem; color: #6c757d; margin-bottom: .25rem; }
-</style>
-
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <div>
-    <h1 class="h4 mb-1">Community Event Locator</h1>
-    <div class="text-muted">Interactive Leaflet map backed by Django REST + PostGIS</div>
-  </div>
-  <div class="d-none d-lg-flex align-items-center gap-2">
-    <span class="chip"><span>Events</span><span id="chipEvents" class="badge text-bg-primary">0</span></span>
-    <span class="chip"><span>Routes</span><span id="chipRoutes" class="badge text-bg-dark">0</span></span>
-    <span class="chip"><span>Neighborhoods</span><span id="chipHoods" class="badge text-bg-success">0</span></span>
-  </div>
-</div>
-
-<!-- Loading stripe -->
-<div id="loading" class="alert alert-info py-2 d-none" role="status" aria-live="polite">
-  <div class="d-inline-flex align-items-center gap-2">
-    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-    <span>Loading…</span>
-  </div>
-</div>
-
-<div class="app-shell">
-  <!-- Sidebar -->
-  <aside class="panel p-3">
-    <div class="panel-title">Spatial queries</div>
-
-    <!-- Nearby -->
-    <div class="mb-4">
-      <div class="small text-muted mb-2">Click the map to set a center point.</div>
-      <div class="row g-2">
-        <div class="col-6">
-          <label for="lat" class="form-label form-label-sm">Latitude</label>
-          <input id="lat" class="form-control form-control-sm" value="53.3498" inputmode="decimal" />
+<div class="container my-4">
+  <div class="row g-3">
+    <!-- Controls -->
+    <aside class="col-12 col-lg-4">
+      <!-- Nearby -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title">Nearby</h6>
+          <div class="row g-2">
+            <div class="col-6">
+              <label for="lat" class="form-label form-label-sm">Latitude</label>
+              <input id="lat" class="form-control form-control-sm" value="53.3498">
+            </div>
+            <div class="col-6">
+              <label for="lng" class="form-label form-label-sm">Longitude</label>
+              <input id="lng" class="form-control form-control-sm" value="-6.2603">
+            </div>
+            <div class="col-12">
+              <label for="radius" class="form-label form-label-sm d-flex justify-content-between">
+                <span>Radius (m)</span><span id="radiusValue" class="text-muted">1000</span>
+              </label>
+              <input id="radius" class="form-range" type="range" min="50" max="3000" value="1000">
+            </div>
+            <div class="col-12 d-grid">
+              <div class="d-flex gap-2">
+                <button id="btnNearby" class="btn btn-primary btn-sm">Find nearby</button>
+                <button id="btnReset"  class="btn btn-secondary btn-sm">Reset</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="col-6">
-          <label for="lng" class="form-label form-label-sm">Longitude</label>
-          <input id="lng" class="form-control form-control-sm" value="-6.2603" inputmode="decimal" />
+      </div>
+
+      <!-- In neighborhood -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title">In neighborhood</h6>
+          <label for="neighborhoodId" class="form-label form-label-sm">Neighborhood</label>
+          <select id="neighborhoodId" class="form-select form-select-sm"></select>
+          <div class="d-grid mt-2">
+            <button id="btnNeighborhood" class="btn btn-outline-primary btn-sm">Events in neighborhood</button>
+          </div>
         </div>
-        <div class="col-12">
-          <label for="radius" class="form-label form-label-sm d-flex justify-content-between">
-            <span>Radius (m)</span><span id="radiusValue" class="text-muted">1000</span>
+      </div>
+
+      <!-- Along route -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title">Along route</h6>
+          <label for="routeId" class="form-label form-label-sm">Route</label>
+          <select id="routeId" class="form-select form-select-sm"></select>
+          <label for="buffer" class="form-label form-label-sm d-flex justify-content-between">
+            <span>Buffer (m)</span><span id="bufferValue" class="text-muted">200</span>
           </label>
-          <input id="radius" class="form-range" type="range" min="50" max="5000" step="50" value="1000" />
+          <input id="buffer" class="form-range" type="range" min="50" max="2000" value="200">
+          <div class="d-grid mt-2">
+            <button id="btnRoute" class="btn btn-outline-dark btn-sm">Events along route</button>
+          </div>
         </div>
-        <div class="col-12 d-grid">
-          <button id="btnNearby" class="btn btn-primary btn-sm">Find nearby events</button>
+      </div>
+
+      <!-- Loading stripe -->
+      <div id="loading" class="alert alert-info py-2 d-none" role="status">
+        <div class="d-inline-flex align-items-center gap-2">
+          <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+          <span>Loading…</span>
         </div>
       </div>
-    </div>
+    </aside>
 
-    <hr class="my-3">
+    <!-- Map -->
+    <section class="col-12 col-lg-8">
+      <div id="map" class="rounded border" style="height:70vh"></div>
 
-    <!-- In neighborhood -->
-    <div class="mb-4">
-      <label for="hood" class="form-label form-label-sm">Neighborhood</label>
-      <select id="hood" class="form-select form-select-sm"></select>
-      <div class="d-grid mt-2">
-        <button id="btnHood" class="btn btn-outline-primary btn-sm">Events in neighborhood</button>
+      <!-- Simple floating legend -->
+      <div class="legend small bg-white border rounded-3 p-2 mt-2">
+        <div><span class="key events me-2"></span> All Events</div>
+        <div><span class="key query me-2"></span> Query Results</div>
+        <div><span class="line route me-2"></span> Route</div>
+        <div><span class="line hood me-2"></span> Neighborhood</div>
       </div>
-    </div>
-
-    <hr class="my-3">
-
-    <!-- Along route -->
-    <div class="mb-4">
-      <label for="route" class="form-label form-label-sm">Route</label>
-      <select id="route" class="form-select form-select-sm mb-2"></select>
-      <label for="buffer" class="form-label form-label-sm d-flex justify-content-between">
-        <span>Buffer (m)</span><span id="bufferValue" class="text-muted">200</span>
-      </label>
-      <input id="buffer" class="form-range" type="range" min="50" max="2000" step="50" value="200" />
-      <div class="d-grid mt-2">
-        <button id="btnRoute" class="btn btn-outline-dark btn-sm">Events along route</button>
-      </div>
-    </div>
-
-    <div class="small text-muted">
-      <strong>Tips</strong><br>
-      • Click map to set center • Drag the pin • Toggle layers in the control • Use slider to tune radius/buffer
-    </div>
-  </aside>
-
-  <!-- Map pane -->
-  <section class="position-relative">
-    <div id="map" aria-label="Interactive map"></div>
-
-    <!-- Floating legend -->
-    <div class="legend">
-      <div class="mb-1"><span class="key events"></span> All Events</div>
-      <div class="mb-1"><span class="key query" ></span> Query Results</div>
-      <div class="mb-1"><span class="line route"></span> Route</div>
-      <div class=""><span class="line hood"></span> Neighborhood</div>
-    </div>
-  </section>
-</div>
-
-<!-- Toast container -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
-  <div id="toast" class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="d-flex">
-      <div id="toast-body" class="toast-body">Something went wrong.</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
+    </section>
   </div>
 </div>
 
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-  crossorigin=""
-/>
-<script
-  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-  crossorigin=""
-></script>
+<!-- Toast container (used by JS) -->
+<div id="toast" class="toast align-items-center text-bg-danger border-0 position-fixed bottom-0 end-0 p-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index:1100">
+  <div class="d-flex">
+    <div id="toast-body" class="toast-body">Message</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+  </div>
+</div>
+{% endblock %}
 
-<script>
-(async () => {
-  const loading = document.getElementById('loading');
-  const toastEl = document.getElementById('toast');
-  const toastBody = document.getElementById('toast-body');
-  const showToast = (msg) => { toastBody.textContent = msg; new bootstrap.Toast(toastEl).show(); };
-  const setLoading = (v) => loading.classList.toggle('d-none', !v);
-
-  // Controls
-  const latEl = document.getElementById('lat');
-  const lngEl = document.getElementById('lng');
-  const radiusEl = document.getElementById('radius');
-  const hoodSel = document.getElementById('hood');
-  const routeSel = document.getElementById('route');
-  const bufferEl = document.getElementById('buffer');
-  const radiusValue = document.getElementById('radiusValue');
-  const bufferValue = document.getElementById('bufferValue');
-  radiusEl.addEventListener('input', () => radiusValue.textContent = radiusEl.value);
-  bufferEl.addEventListener('input', () => bufferValue.textContent = bufferEl.value);
-
-  // Helpers
-  async function getJSON(url){
-    try {
-      setLoading(true);
-      const r = await fetch(url);
-      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return await r.json();
-    } catch(e){
-      console.error(e);
-      showToast(`Request failed: ${e.message}`);
-      return { type:'FeatureCollection', features:[] };
-    } finally {
-      setLoading(false);
-    }
-  }
-  function fitIfAny(layer){
-    if (layer.getLayers().length) map.fitBounds(layer.getBounds(), {padding:[20,20]});
-  }
-
-  // Map + tiles
-  const map = L.map('map', { zoomControl: false }).setView([53.3498, -6.2603], 12);
-  L.control.zoom({ position: 'bottomleft' }).addTo(map);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-
-  // Layers
-  const eventsAllLayer = L.geoJSON(null, {
-    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-      radius: 7, weight: 2, color: '#0d6efd', fillColor: '#0d6efd', fillOpacity: .15
-    }).bindPopup(`<strong>${f.properties.title}</strong><br>${f.properties.description||''}`)
-  }).addTo(map);
-
-  const queryResultLayer = L.geoJSON(null, {
-    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-      radius: 7, weight: 2, color: '#6610f2', fillColor: '#6610f2', fillOpacity: .15
-    }).bindPopup(`<strong>${f.properties.title}</strong><br>${f.properties.description||''}`)
-  }).addTo(map);
-
-  const routesLayer = L.geoJSON(null, { style:{ weight:3, color:'#212529' } }).addTo(map);
-  const hoodsLayer  = L.geoJSON(null, { style:{ color:'#20c997', weight:2, fillOpacity:0.15 } }).addTo(map);
-
-  const centerMarker = L.marker([53.3498,-6.2603], { draggable:true }).addTo(map);
-  let centerCircle = L.circle(centerMarker.getLatLng(), { radius: +radiusEl.value, color:'#0d6efd', fillOpacity:.05 }).addTo(map);
-
-  // Load base data + stats
-  const [events, routes, hoods] = await Promise.all([
-    getJSON('/api/events/'),
-    getJSON('/api/routes/'),
-    getJSON('/api/neighborhoods/')
-  ]);
-  eventsAllLayer.addData(events);
-  routesLayer.addData(routes);
-  hoodsLayer.addData(hoods);
-
-  document.getElementById('chipEvents').textContent = (events.features||[]).length;
-  document.getElementById('chipRoutes').textContent = (routes.features||[]).length;
-  document.getElementById('chipHoods').textContent  = (hoods.features||[]).length;
-
-  // Populate selects
-  (hoods.features || []).forEach(f => {
-    const opt = document.createElement('option');
-    opt.value = f.id;
-    opt.textContent = f.properties.name || `Neighborhood ${f.id}`;
-    hoodSel.appendChild(opt);
-  });
-  (routes.features || []).forEach(f => {
-    const opt = document.createElement('option');
-    opt.value = f.id;
-    opt.textContent = f.properties.name || `Route ${f.id}`;
-    routeSel.appendChild(opt);
-  });
-
-  // Fit to everything initially
-  const allBounds = L.latLngBounds([]);
-  [eventsAllLayer, routesLayer, hoodsLayer].forEach(l => { if (l.getLayers().length) allBounds.extend(l.getBounds()); });
-  if (allBounds.isValid()) map.fitBounds(allBounds, { padding:[20,20] });
-
-  // Interactions
-  map.on('click', (e) => {
-    const {lat, lng} = e.latlng;
-    latEl.value = lat.toFixed(6);
-    lngEl.value = lng.toFixed(6);
-    centerMarker.setLatLng(e.latlng);
-    centerCircle.setLatLng(e.latlng);
-  });
-  centerMarker.on('move', () => {
-    const {lat, lng} = centerMarker.getLatLng();
-    latEl.value = lat.toFixed(6);
-    lngEl.value = lng.toFixed(6);
-    centerCircle.setLatLng(centerMarker.getLatLng());
-  });
-  radiusEl.addEventListener('input', () => {
-    centerCircle.setRadius(+radiusEl.value || 0);
-  });
-
-  // Query buttons
-  document.getElementById('btnNearby').addEventListener('click', async () => {
-    const lat = parseFloat(latEl.value);
-    const lng = parseFloat(lngEl.value);
-    const radius = parseInt(radiusEl.value || '1000', 10);
-    if (isNaN(lat) || isNaN(lng)) return showToast('Pick a point or enter lat/lng.');
-    const fc = await getJSON(`/api/events/nearby/?lat=${lat}&lng=${lng}&radius=${radius}`);
-    queryResultLayer.clearLayers().addData(fc); fitIfAny(queryResultLayer);
-    if (!queryResultLayer.getLayers().length) showToast('No events found for that nearby query.');
-  });
-
-  document.getElementById('btnHood').addEventListener('click', async () => {
-    const id = hoodSel.value;
-    if (!id) return showToast('Select a neighborhood.');
-    const fc = await getJSON(`/api/events/in_neighborhood/?neighborhood_id=${id}`);
-    queryResultLayer.clearLayers().addData(fc); fitIfAny(queryResultLayer);
-    if (!queryResultLayer.getLayers().length) showToast('No events in that neighborhood.');
-  });
-
-  document.getElementById('btnRoute').addEventListener('click', async () => {
-    const id = routeSel.value;
-    const buffer = parseInt(bufferEl.value || '200', 10);
-    if (!id) return showToast('Select a route.');
-    const fc = await getJSON(`/api/events/along_route/?route_id=${id}&buffer=${buffer}`);
-    queryResultLayer.clearLayers().addData(fc); fitIfAny(queryResultLayer);
-    if (!queryResultLayer.getLayers().length) showToast('No events along that route/buffer.');
-  });
-
-  // Layer control
-  L.control.layers(null, {
-    'All Events (context)': eventsAllLayer,
-    'Routes': routesLayer,
-    'Neighborhoods': hoodsLayer,
-    'Query results': queryResultLayer
-  }, { collapsed: false, position: 'topleft' }).addTo(map);
-})();
-</script>
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{% static 'js/map.js' %}" defer></script>
 {% endblock %}
