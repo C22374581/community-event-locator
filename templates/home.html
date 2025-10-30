@@ -1,10 +1,65 @@
 {% extends "base.html" %}
+{% block title %}Home · Community Event Locator{% endblock %}
+
 {% block content %}
-  <h1 class="h4 mb-3">Welcome</h1>
-  <p class="text-muted">This is your Django app’s landing page.</p>
-  <ul>
-    <li><a href="/map/">Open the interactive map</a></li>
-    <li><a href="/api/">Browse the API</a></li>
-    <li><a href="/admin/">Open Django admin</a></li>
-  </ul>
+<section class="hero">
+  <div class="row align-items-center g-4">
+    <div class="col-lg-7">
+      <h1 class="display-6 fw-semibold mb-2">Find what’s happening near you.</h1>
+      <p class="lead text-secondary">Browse events, explore walking routes, and discover neighborhoods — all powered by <span class="text-info">Leaflet</span>, <span class="text-info">Django REST</span>, and <span class="text-info">PostGIS</span>.</p>
+      <div class="mt-3">
+        <a href="{% url 'map' %}" class="btn btn-info text-dark fw-semibold me-2">
+          <i class="bi bi-map"></i> Open Interactive Map
+        </a>
+        <a href="/api/" class="btn btn-outline-info">
+          <i class="bi bi-braces"></i> Explore API
+        </a>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="row g-3">
+        <div class="col-6">
+          <div class="card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ stats.events }}</div>
+            <div class="text-secondary">Events</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ stats.routes }}</div>
+            <div class="text-secondary">Routes</div>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="card p-3 text-center">
+            <div class="fs-3 fw-bold">{{ stats.neighborhoods }}</div>
+            <div class="text-secondary">Neighborhoods</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mt-4">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card p-3 h-100">
+        <h5 class="mb-2"><i class="bi bi-broadcast-pin"></i> Nearby events</h5>
+        <p class="text-secondary mb-2">Our API supports geospatial queries: <em>within radius</em>, <em>within neighborhood</em>, and <em>along route</em>.</p>
+        <code class="small">GET /api/events/nearby/?lat=53.3498&lng=-6.2603&radius=1500</code>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card p-3 h-100">
+        <h5 class="mb-2"><i class="bi bi-diagram-3"></i> Tech stack</h5>
+        <ul class="mb-0 text-secondary">
+          <li>Django + Django REST Framework + DRF-GIS</li>
+          <li>PostgreSQL / PostGIS with spatial indexes</li>
+          <li>Leaflet + OpenStreetMap tiles</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
 {% endblock %}
