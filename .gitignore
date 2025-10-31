@@ -7,3 +7,6 @@ venv/
 staticfiles/
 node_modules/
 .env.local
+
+# Local secrets
+.env
