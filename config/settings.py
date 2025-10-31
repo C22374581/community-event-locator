@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "rest_framework_gis",
-    "drf_spectacular",      # Swagger / OpenAPI docs
+    "drf_spectacular",         # Swagger / OpenAPI docs
     "django_filters",
     "corsheaders",
 
@@ -48,7 +48,7 @@ INSTALLED_APPS = [
 # Middleware
 # ---------------------------------------------------------------------
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",   # must be before CommonMiddleware
+    "corsheaders.middleware.CorsMiddleware",  # must be before CommonMiddleware
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -58,7 +58,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# Allow all origins for local demo/dev (safe for assignment)
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_URLS_REGEX = r"^/api/.*$"
 
 # ---------------------------------------------------------------------
 # URLs / WSGI
@@ -133,7 +135,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Django REST Framework
 # ---------------------------------------------------------------------
 REST_FRAMEWORK = {
-    # Renderers: keep browsable API in debug mode
+    # Renderers
     "DEFAULT_RENDERER_CLASSES": (
         [
             "rest_framework.renderers.JSONRenderer",
@@ -155,7 +157,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
 
-    # Rate limiting
+    # Rate limiting (demo defaults)
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -164,7 +166,7 @@ REST_FRAMEWORK = {
 }
 
 # ---------------------------------------------------------------------
-# drf-spectacular (Swagger / Redoc)
+# drf-spectacular (Swagger / ReDoc)
 # ---------------------------------------------------------------------
 SPECTACULAR_SETTINGS = {
     "TITLE": "Community Event Locator API",
@@ -178,7 +180,6 @@ SPECTACULAR_SETTINGS = {
 # ---------------------------------------------------------------------
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SESSION_COOKIE_SECURE = False   # set True in prod
-CSRF_COOKIE_SECURE = False      # set True in prod
+SESSION_COOKIE_SECURE = False  # set True in production
+CSRF_COOKIE_SECURE = False     # set True in production
 X_FRAME_OPTIONS = "DENY"
-
