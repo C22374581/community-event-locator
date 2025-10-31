@@ -4,7 +4,6 @@
 {% block title %}Map – Community Event Locator{% endblock %}
 
 {% block head %}
-  <!-- Page-specific CSS + Leaflet CSS -->
   <link rel="stylesheet" href="{% static 'css/map.css' %}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 {% endblock %}
@@ -12,8 +11,10 @@
 {% block content %}
 <div class="container my-4">
   <div class="row g-3">
-    <!-- Controls -->
+
+    <!-- Sidebar controls -->
     <aside class="col-12 col-lg-4">
+
       <!-- Nearby -->
       <div class="card mb-3">
         <div class="card-body">
@@ -21,23 +22,21 @@
           <div class="row g-2">
             <div class="col-6">
               <label for="lat" class="form-label form-label-sm">Latitude</label>
-              <input id="lat" class="form-control form-control-sm" value="53.3498">
+              <input id="lat" type="number" step="any" class="form-control form-control-sm" value="53.3498">
             </div>
             <div class="col-6">
               <label for="lng" class="form-label form-label-sm">Longitude</label>
-              <input id="lng" class="form-control form-control-sm" value="-6.2603">
+              <input id="lng" type="number" step="any" class="form-control form-control-sm" value="-6.2603">
             </div>
             <div class="col-12">
               <label for="radius" class="form-label form-label-sm d-flex justify-content-between">
                 <span>Radius (m)</span><span id="radiusValue" class="text-muted">1000</span>
               </label>
-              <input id="radius" class="form-range" type="range" min="50" max="3000" value="1000">
+              <input id="radius" type="range" class="form-range" min="50" max="2000" value="1000">
             </div>
-            <div class="col-12 d-grid">
-              <div class="d-flex gap-2">
-                <button id="btnNearby" class="btn btn-primary btn-sm">Find nearby</button>
-                <button id="btnReset"  class="btn btn-secondary btn-sm">Reset</button>
-              </div>
+            <div class="col-12 d-flex gap-2">
+              <button id="btnNearby" class="btn btn-primary btn-sm flex-fill">Find nearby</button>
+              <button id="btnReset" class="btn btn-secondary btn-sm flex-fill">Reset</button>
             </div>
           </div>
         </div>
@@ -61,10 +60,10 @@
           <h6 class="card-title">Along route</h6>
           <label for="routeId" class="form-label form-label-sm">Route</label>
           <select id="routeId" class="form-select form-select-sm"></select>
-          <label for="buffer" class="form-label form-label-sm d-flex justify-content-between">
+          <label for="buffer" class="form-label form-label-sm d-flex justify-content-between mt-2">
             <span>Buffer (m)</span><span id="bufferValue" class="text-muted">200</span>
           </label>
-          <input id="buffer" class="form-range" type="range" min="50" max="2000" value="200">
+          <input id="buffer" type="range" class="form-range" min="50" max="500" value="200">
           <div class="d-grid mt-2">
             <button id="btnRoute" class="btn btn-outline-dark btn-sm">Events along route</button>
           </div>
@@ -74,32 +73,28 @@
       <!-- Loading stripe -->
       <div id="loading" class="alert alert-info py-2 d-none" role="status">
         <div class="d-inline-flex align-items-center gap-2">
-          <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+          <div class="spinner-border spinner-border-sm" role="status"></div>
           <span>Loading…</span>
         </div>
       </div>
+
     </aside>
 
     <!-- Map -->
     <section class="col-12 col-lg-8">
       <div id="map" class="rounded border" style="height:70vh"></div>
-
-      <!-- Simple floating legend -->
-      <div class="legend small bg-white border rounded-3 p-2 mt-2">
-        <div><span class="key events me-2"></span> All Events</div>
-        <div><span class="key query me-2"></span> Query Results</div>
-        <div><span class="line route me-2"></span> Route</div>
-        <div><span class="line hood me-2"></span> Neighborhood</div>
-      </div>
     </section>
+
   </div>
 </div>
 
-<!-- Toast container (used by JS) -->
-<div id="toast" class="toast align-items-center text-bg-danger border-0 position-fixed bottom-0 end-0 p-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index:1100">
+<!-- Toast -->
+<div id="toast" class="toast align-items-center text-bg-danger border-0 position-fixed bottom-0 end-0 m-3"
+     role="alert" aria-live="assertive" aria-atomic="true" style="z-index:1080">
   <div class="d-flex">
     <div id="toast-body" class="toast-body">Message</div>
-    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto"
+            data-bs-dismiss="toast" aria-label="Close"></button>
   </div>
 </div>
 {% endblock %}

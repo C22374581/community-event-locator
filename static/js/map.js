@@ -9,7 +9,8 @@
     events: "/api/events/",
     nearby: (lat, lng, r) =>
       `/api/events/nearby/?lat=${lat}&lng=${lng}&radius=${r}`,
-    inHood: (id) => `/api/events/in_neighborhood/?neighborhood_id=${id}`,
+    inHood: (id) =>
+      `/api/events/in_neighborhood/?neighborhood_id=${id}`,
     along: (id, buffer) =>
       `/api/events/along_route/?route_id=${id}&buffer=${buffer}`,
   };
@@ -18,17 +19,17 @@
 
   // ====== DOM HELPERS ======
   const $ = (sel) => document.querySelector(sel);
-  function pick(...sels) {
+  const pick = (...sels) => {
     for (const s of sels) {
       const el = document.querySelector(s);
       if (el) return el;
     }
     return null;
-  }
+  };
 
-  // Loading stripe + toast helpers (match ids/classes used in base/map.html)
+  // Loading + toast (ids/classes must match map.html)
   const loadingEl = $("#loading");
-  const toastEl = $("#toast");
+  const toastEl   = $("#toast");
   const toastBody = $("#toast-body");
 
   function setLoading(v) {
@@ -38,11 +39,12 @@
 
   function toast(message, type = "info", ms = 2400) {
     if (!toastEl || !toastBody) {
-      console.warn("Toast container missing; message:", message);
+      // still surface the message during development
+      console.warn("Toast:", message);
       alert(message);
       return;
     }
-    toastEl.className = `toast align-items-center text-bg-${type} border-0 position-fixed bottom-0 end-0 p-3`;
+    toastEl.className = `toast align-items-center text-bg-${type} border-0 position-fixed bottom-0 end-0 m-3`;
     toastBody.textContent = message;
     new bootstrap.Toast(toastEl, { delay: ms }).show();
   }
@@ -105,12 +107,12 @@
       const hood = p.neighborhood ? `Neighborhood #${p.neighborhood}` : "—";
       layer.bindPopup(
         `
-        <div class="small">
-          <div class="fw-semibold">${p.title ?? "Event"}</div>
-          <div class="text-muted">${p.description ?? ""}</div>
-          <div><i class="bi bi-clock"></i> ${when}</div>
-          <div><i class="bi bi-geo"></i> ${hood}</div>
-        </div>
+          <div class="small">
+            <div class="fw-semibold">${p.title ?? "Event"}</div>
+            <div class="text-muted">${p.description ?? ""}</div>
+            <div><i class="bi bi-clock"></i> ${when}</div>
+            <div><i class="bi bi-geo"></i> ${hood}</div>
+          </div>
         `
       );
     },
@@ -129,12 +131,10 @@
       map.fitBounds(bounds.pad(0.12));
     }
   }
-
   function featureGroupBounds(...layers) {
     const group = L.featureGroup(layers);
     return group.getBounds();
   }
-
   function findLayerById(geoJsonGroup, id) {
     let found = null;
     geoJsonGroup.eachLayer((lyr) => {
@@ -144,56 +144,75 @@
     return found;
   }
 
-  function populateSelect(selectEl, featureCollection, labelFn) {
+  /**
+   * DRF + GeoJSON tolerant coercion:
+   * - FeatureCollection -> features[]
+   * - Feature -> [Feature]
+   * - Array<Feature> -> as-is
+   * - Paginated { results: ... } -> unwrap recursively
+   */
+  function toFeatureArray(data) {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (data.results) return toFeatureArray(data.results); // <- DRF pagination
+    if (data.type === "FeatureCollection") return data.features ?? [];
+    if (data.type === "Feature") return [data];
+    return []; // unknown shape
+  }
+
+  function populateSelect(selectEl, geojson, labelFn) {
     if (!selectEl) return;
     selectEl.innerHTML = "";
-    for (const f of featureCollection?.features ?? []) {
+    const feats = toFeatureArray(geojson);
+    for (const f of feats) {
       const opt = document.createElement("option");
       const fid = f.id ?? f.properties?.id;
       opt.value = fid;
-      opt.textContent = labelFn(f) || `#${fid}`;
+      opt.textContent = labelFn ? labelFn(f) : `#${fid}`;
       selectEl.appendChild(opt);
     }
   }
 
   // ====== BASE DATA LOAD & WIRING ======
+  let baseNeighborhoods = null;
+  let baseRoutes = null;
+  let baseEvents = null;
+
   async function loadBaseData() {
     setLoading(true);
     try {
+      // fetch in parallel
       const [nbh, rts, evs] = await Promise.all([
         fetchJSON(API.neighborhoods),
         fetchJSON(API.routes),
         fetchJSON(API.events),
       ]);
 
-      neighborhoodsLayer.clearLayers().addData(nbh);
-      routesLayer.clearLayers().addData(rts);
-      eventsLayer.clearLayers().addData(evs);
+      baseNeighborhoods = nbh;
+      baseRoutes = rts;
+      baseEvents = evs;
 
-      // chips (optional badges in your header)
-      const cEvt = $("#chipEvents");
-      const cRt = $("#chipRoutes");
-      const cHd = $("#chipHoods");
-      if (cEvt) cEvt.textContent = (evs.features ?? []).length;
-      if (cRt) cRt.textContent = (rts.features ?? []).length;
-      if (cHd) cHd.textContent = (nbh.features ?? []).length;
+      // draw (always feed arrays to Leaflet)
+      neighborhoodsLayer.clearLayers().addData(toFeatureArray(nbh));
+      routesLayer.clearLayers().addData(toFeatureArray(rts));
+      eventsLayer.clearLayers().addData(toFeatureArray(evs));
 
-      // populate selects (support either id set)
-      const hoodSel = pick("#hood", "#neighborhoodId");
-      const routeSel = pick("#route", "#routeId");
+      // populate selects (support either id being present)
+      const hoodSel  = pick("#neighborhoodId", "#hood");
+      const routeSel = pick("#routeId", "#route");
 
       populateSelect(
         hoodSel,
         nbh,
-        (f) => f.properties?.name || `Neighborhood ${f.id}`
+        (f) => f?.properties?.name || `Neighborhood ${f.id}`
       );
       populateSelect(
         routeSel,
         rts,
-        (f) => f.properties?.name || `Route ${f.id}`
+        (f) => f?.properties?.name || `Route ${f.id}`
       );
 
-      // change -> zoom
+      // change -> zoom to selected feature
       hoodSel?.addEventListener("change", () => {
         const lyr = findLayerById(neighborhoodsLayer, hoodSel.value);
         if (lyr?.getBounds) fitIfValid(lyr.getBounds());
@@ -203,24 +222,26 @@
         if (lyr?.getBounds) fitIfValid(lyr.getBounds());
       });
 
-      // fit to everything
+      // fit to everything once
       fitIfValid(featureGroupBounds(neighborhoodsLayer, routesLayer, eventsLayer));
       toast("Map data loaded.", "success", 1500);
     } catch (e) {
       console.error(e);
       toast("Failed to load map data.", "danger");
+      // rethrow so you still see a stack in dev tools
+      throw e;
     } finally {
       setLoading(false);
     }
   }
 
   // ====== CONTROLS ======
-  const latEl = pick("#lat");
-  const lngEl = pick("#lng");
-  const radiusEl = pick("#radius");
-  const radiusValue = pick("#radiusValue");
-  const bufferEl = pick("#buffer", "#bufferMeters");
-  const bufferValue = pick("#bufferValue");
+  const latEl        = pick("#lat");
+  const lngEl        = pick("#lng");
+  const radiusEl     = pick("#radius");
+  const radiusValue  = pick("#radiusValue");
+  const bufferEl     = pick("#buffer", "#bufferMeters");
+  const bufferValue  = pick("#bufferValue");
 
   if (latEl && lngEl) {
     const syncFromMarker = () => {
@@ -254,11 +275,11 @@
   async function nearby() {
     const lat = parseFloat(latEl?.value ?? centerMarker.getLatLng().lat);
     const lng = parseFloat(lngEl?.value ?? centerMarker.getLatLng().lng);
-    const r = parseInt(radiusEl?.value || "1000", 10);
+    const r   = parseInt(radiusEl?.value ?? "1000", 10);
     setLoading(true);
     try {
       const data = await fetchJSON(API.nearby(lat, lng, r));
-      eventsLayer.clearLayers().addData(data);
+      eventsLayer.clearLayers().addData(toFeatureArray(data));
       fitIfValid(centerCircle.getBounds());
       toast(`Loaded nearby events within ${r}m.`, "info");
     } catch (e) {
@@ -270,12 +291,12 @@
   }
 
   async function filterByNeighborhood() {
-    const sel = pick("#hood", "#neighborhoodId");
+    const sel = pick("#neighborhoodId", "#hood");
     if (!sel || !sel.value) return toast("Select a neighborhood.", "warning");
     setLoading(true);
     try {
       const data = await fetchJSON(API.inHood(sel.value));
-      eventsLayer.clearLayers().addData(data);
+      eventsLayer.clearLayers().addData(toFeatureArray(data));
       const lyr = findLayerById(neighborhoodsLayer, sel.value);
       if (lyr?.getBounds) fitIfValid(lyr.getBounds());
       toast("Filtered by neighborhood.", "info");
@@ -288,13 +309,13 @@
   }
 
   async function filterAlongRoute() {
-    const sel = pick("#route", "#routeId");
+    const sel = pick("#routeId", "#route");
     if (!sel || !sel.value) return toast("Select a route.", "warning");
     const buf = parseInt(bufferEl?.value || "200", 10);
     setLoading(true);
     try {
       const data = await fetchJSON(API.along(sel.value, buf));
-      eventsLayer.clearLayers().addData(data);
+      eventsLayer.clearLayers().addData(toFeatureArray(data));
       const lyr = findLayerById(routesLayer, sel.value);
       if (lyr?.getBounds) fitIfValid(lyr.getBounds());
       toast(`Filtered along route (${buf}m).`, "info");
@@ -337,27 +358,21 @@
   }
 
   // ====== WIRE UI ======
-  function bindUI() {
-    pick("#btnNearby")?.addEventListener("click", geolocateAndNearby);
-    pick("#btnReset")?.addEventListener("click", resetAll);
-    pick("#btnNeighborhood", "#btnHood")?.addEventListener(
-      "click",
-      filterByNeighborhood
-    );
-    pick("#btnRoute")?.addEventListener("click", filterAlongRoute);
+  pick("#btnNearby")?.addEventListener("click", geolocateAndNearby);
+  pick("#btnReset")?.addEventListener("click", resetAll);
+  pick("#btnNeighborhood", "#btnHood")?.addEventListener("click", filterByNeighborhood);
+  pick("#btnRoute")?.addEventListener("click", filterAlongRoute);
 
-    // click map to move center
-    map.on("click", (e) => {
-      centerMarker.setLatLng(e.latlng);
-      centerCircle.setLatLng(e.latlng);
-      if (latEl) latEl.value = e.latlng.lat.toFixed(6);
-      if (lngEl) lngEl.value = e.latlng.lng.toFixed(6);
-    });
-  }
+  // click map to move center
+  map.on("click", (e) => {
+    centerMarker.setLatLng(e.latlng);
+    centerCircle.setLatLng(e.latlng);
+    if (latEl) latEl.value = e.latlng.lat.toFixed(6);
+    if (lngEl) lngEl.value = e.latlng.lng.toFixed(6);
+  });
 
   // ====== INIT ======
   document.addEventListener("DOMContentLoaded", async () => {
-    bindUI();
     await loadBaseData();
   });
 })();
