@@ -3,16 +3,15 @@
   "use strict";
 
   // ====== CONFIG ======
+  const API_ROOT = "/api/";
   const API = {
-    neighborhoods: "/api/neighborhoods/",
-    routes: "/api/routes/",
-    events: "/api/events/",
-    nearby: (lat, lng, r) =>
-      `/api/events/nearby/?lat=${lat}&lng=${lng}&radius=${r}`,
-    inHood: (id) =>
-      `/api/events/in_neighborhood/?neighborhood_id=${id}`,
-    along: (id, buffer) =>
-      `/api/events/along_route/?route_id=${id}&buffer=${buffer}`,
+    neighborhoods: `${API_ROOT}neighborhoods/`,
+    routes:        `${API_ROOT}routes/`,
+    // events is paginated in DRF -> we ask for a big page
+    events:        `${API_ROOT}events/?page=1&page_size=200`,
+    nearby:   (lat, lng, r) => `${API_ROOT}events/nearby/?lat=${lat}&lng=${lng}&radius=${r}`,
+    inHood:   (id)         => `${API_ROOT}events/in_neighborhood/?neighborhood_id=${id}`,
+    along:    (id, buffer) => `${API_ROOT}events/along_route/?route_id=${id}&buffer=${buffer}`,
   };
 
   const DUBLIN = [53.3498, -6.2603];
@@ -39,12 +38,12 @@
 
   function toast(message, type = "info", ms = 2400) {
     if (!toastEl || !toastBody) {
-      // still surface the message during development
+      // make sure errors still surface during dev
       console.warn("Toast:", message);
       alert(message);
       return;
     }
-    toastEl.className = `toast align-items-center text-bg-${type} border-0 position-fixed bottom-0 end-0 m-3`;
+    toastEl.className = `toast align-items-center text-bg-${type} border-0 position-fixed top-0 start-50 translate-middle-x mt-3`;
     toastBody.textContent = message;
     new bootstrap.Toast(toastEl, { delay: ms }).show();
   }
@@ -102,17 +101,17 @@
         fillOpacity: 0.9,
       }),
     onEachFeature: (f, layer) => {
-      const p = f.properties || {};
+      const p = f?.properties || {};
       const when = p.when ? new Date(p.when).toLocaleString() : "TBD";
       const hood = p.neighborhood ? `Neighborhood #${p.neighborhood}` : "—";
       layer.bindPopup(
         `
-          <div class="small">
-            <div class="fw-semibold">${p.title ?? "Event"}</div>
-            <div class="text-muted">${p.description ?? ""}</div>
-            <div><i class="bi bi-clock"></i> ${when}</div>
-            <div><i class="bi bi-geo"></i> ${hood}</div>
-          </div>
+        <div class="small">
+          <div class="fw-semibold">${p.title ?? "Event"}</div>
+          <div class="text-muted">${p.description ?? ""}</div>
+          <div><i class="bi bi-clock"></i> ${when}</div>
+          <div><i class="bi bi-geo"></i> ${hood}</div>
+        </div>
         `
       );
     },
@@ -150,14 +149,24 @@
    * - Feature -> [Feature]
    * - Array<Feature> -> as-is
    * - Paginated { results: ... } -> unwrap recursively
+   * Returns [] for anything unknown instead of throwing.
    */
   function toFeatureArray(data) {
     if (!data) return [];
     if (Array.isArray(data)) return data;
-    if (data.results) return toFeatureArray(data.results); // <- DRF pagination
-    if (data.type === "FeatureCollection") return data.features ?? [];
+    // DRF pagination wrapper?
+    if (Object.prototype.hasOwnProperty.call(data, "results")) {
+      return toFeatureArray(data.results);
+    }
+    // FeatureCollection
+    if (data.type === "FeatureCollection") {
+      return Array.isArray(data.features) ? data.features : [];
+    }
+    // Single Feature
     if (data.type === "Feature") return [data];
-    return []; // unknown shape
+    // Unknown => don't break UI
+    console.warn("Unexpected GeoJSON shape:", data);
+    return [];
   }
 
   function populateSelect(selectEl, geojson, labelFn) {
@@ -166,9 +175,10 @@
     const feats = toFeatureArray(geojson);
     for (const f of feats) {
       const opt = document.createElement("option");
-      const fid = f.id ?? f.properties?.id;
-      opt.value = fid;
-      opt.textContent = labelFn ? labelFn(f) : `#${fid}`;
+      const fid = f.id ?? f?.properties?.id;
+      opt.value = fid ?? "";
+      const label = labelFn ? labelFn(f) : `#${fid}`;
+      opt.textContent = label || `#${fid ?? ""}`;
       selectEl.appendChild(opt);
     }
   }
@@ -192,10 +202,12 @@
       baseRoutes = rts;
       baseEvents = evs;
 
-      // draw (always feed arrays to Leaflet)
+      // Draw – defensively coerce to arrays of Features for Leaflet
       neighborhoodsLayer.clearLayers().addData(toFeatureArray(nbh));
       routesLayer.clearLayers().addData(toFeatureArray(rts));
-      eventsLayer.clearLayers().addData(toFeatureArray(evs));
+
+      const evFC = evs?.results ?? evs; // paginated {results: FC} or plain FC
+      eventsLayer.clearLayers().addData(toFeatureArray(evFC));
 
       // populate selects (support either id being present)
       const hoodSel  = pick("#neighborhoodId", "#hood");
@@ -204,12 +216,12 @@
       populateSelect(
         hoodSel,
         nbh,
-        (f) => f?.properties?.name || `Neighborhood ${f.id}`
+        (f) => f?.properties?.name || `Neighborhood ${f?.id}`
       );
       populateSelect(
         routeSel,
         rts,
-        (f) => f?.properties?.name || `Route ${f.id}`
+        (f) => f?.properties?.name || `Route ${f?.id}`
       );
 
       // change -> zoom to selected feature
@@ -223,13 +235,14 @@
       });
 
       // fit to everything once
-      fitIfValid(featureGroupBounds(neighborhoodsLayer, routesLayer, eventsLayer));
+      fitIfValid(
+        featureGroupBounds(neighborhoodsLayer, routesLayer, eventsLayer)
+      );
       toast("Map data loaded.", "success", 1500);
     } catch (e) {
       console.error(e);
       toast("Failed to load map data.", "danger");
-      // rethrow so you still see a stack in dev tools
-      throw e;
+      // don't rethrow – keep UI interactive
     } finally {
       setLoading(false);
     }
@@ -250,6 +263,7 @@
       lngEl.value = lng.toFixed(6);
       centerCircle.setLatLng(centerMarker.getLatLng());
     };
+    // initialize with current values
     syncFromMarker();
     centerMarker.on("move", syncFromMarker);
   }
@@ -363,7 +377,7 @@
   pick("#btnNeighborhood", "#btnHood")?.addEventListener("click", filterByNeighborhood);
   pick("#btnRoute")?.addEventListener("click", filterAlongRoute);
 
-  // click map to move center
+  // click map to move center marker
   map.on("click", (e) => {
     centerMarker.setLatLng(e.latlng);
     centerCircle.setLatLng(e.latlng);
