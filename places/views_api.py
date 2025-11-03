@@ -1,7 +1,7 @@
 # places/views_api.py
 from django.shortcuts import get_object_or_404
 from django.contrib.gis.geos import Point
-from django.contrib.gis.measure import D
+from django.contrib.gis.measure import D as Distance
 
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -17,15 +17,16 @@ from .serializers import (
 
 """
 API layer for spatial data (Events, Routes, Neighborhoods).
-Implements GeoJSON endpoints with spatial queries using PostGIS + Django REST Framework.
-NOTE: Our Geo* serializers (DRF-GIS) already return a proper GeoJSON FeatureCollection
-when used with `many=True`. So we must NOT wrap again.
+Implements GeoJSON endpoints using PostGIS + Django REST Framework (DRF-GIS).
+
+NOTE: Our Geo* serializers already emit the proper GeoJSON when used with
+`many=True`. Do NOT wrap the serializer output inside another
+FeatureCollection.
 """
 
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
-
 def _first_geom_attr(obj, candidates):
     """
     Return the first attribute on `obj` that exists from `candidates`.
@@ -48,15 +49,14 @@ HOOD_POLY_FIELDS  = ("area", "polygon", "geom", "geometry", "boundary")
 # ---------------------------------------------------------------------
 # Event API
 # ---------------------------------------------------------------------
-
 class EventViewSet(GenericViewSet):
     """
     API for listing and filtering Events with spatial queries.
 
-    /api/events/             -> Paginated list (search + ordering)
-    /api/events/nearby/      -> Events within radius (meters)
-    /api/events/in_neighborhood/ -> Events inside neighborhood polygon
-    /api/events/along_route/ -> Events near a route (buffered)
+        /api/events/              -> Paginated list (search + ordering)
+        /api/events/nearby/       -> Events within radius (meters)
+        /api/events/in_neighborhood/ -> Events inside neighborhood polygon
+        /api/events/along_route/  -> Events near a route (buffered)
     """
 
     pagination_class = PageNumberPagination
@@ -79,17 +79,18 @@ class EventViewSet(GenericViewSet):
         page = self.paginate_queryset(qs)
         ser = EventGeoSerializer(page or qs, many=True)
 
-        # IMPORTANT: serializers already return a FeatureCollection with many=True.
         if page is not None:
-            # Paginated shape: {count, next, previous, results: <FeatureCollection>}
+            # DRF paginator will put `results` around serializer data.
+            # Our serializer already returns the correct GeoJSON for the items,
+            # so we just hand its data to the paginator.
             return self.get_paginated_response(ser.data)
 
-        # Non-paginated: plain FeatureCollection
+        # Non-paginated: just return the serializer data directly.
         return Response(ser.data)
 
-    # ---------------------------------------------------------------
+    # -----------------------------
     # Nearby (by lat/lng + radius)
-    # ---------------------------------------------------------------
+    # -----------------------------
     @action(detail=False, methods=["get"])
     def nearby(self, request):
         try:
@@ -101,14 +102,14 @@ class EventViewSet(GenericViewSet):
 
         pt = Point(lng, lat, srid=4326)
         qs = Event.objects.filter(**{
-            f"{EVENT_POINT_FIELD[0]}__distance_lte": (pt, D(m=radius))
+            f"{EVENT_POINT_FIELD[0]}__distance_lte": (pt, Distance(m=radius))
         })
         ser = EventGeoSerializer(qs, many=True)
         return Response(ser.data)
 
-    # ---------------------------------------------------------------
+    # -----------------------------
     # In neighborhood
-    # ---------------------------------------------------------------
+    # -----------------------------
     @action(detail=False, methods=["get"])
     def in_neighborhood(self, request):
         hood_id = request.GET.get("neighborhood_id")
@@ -124,9 +125,9 @@ class EventViewSet(GenericViewSet):
         ser = EventGeoSerializer(qs, many=True)
         return Response(ser.data)
 
-    # ---------------------------------------------------------------
+    # -----------------------------
     # Along route (buffer)
-    # ---------------------------------------------------------------
+    # -----------------------------
     @action(detail=False, methods=["get"])
     def along_route(self, request):
         route_id = request.GET.get("route_id")
@@ -143,7 +144,7 @@ class EventViewSet(GenericViewSet):
 
         # geography fields + Distance() lets us pass meters safely
         qs = Event.objects.filter(**{
-            f"{EVENT_POINT_FIELD[0]}__distance_lte": (route_geom, D(m=buffer_m))
+            f"{EVENT_POINT_FIELD[0]}__distance_lte": (route_geom, Distance(m=buffer_m))
         })
         ser = EventGeoSerializer(qs, many=True)
         return Response(ser.data)
@@ -152,7 +153,6 @@ class EventViewSet(GenericViewSet):
 # ---------------------------------------------------------------------
 # Route & Neighborhood APIs (no pagination)
 # ---------------------------------------------------------------------
-
 class RouteViewSet(GenericViewSet):
     """Return routes as a GeoJSON FeatureCollection (no pagination)."""
 
@@ -170,7 +170,7 @@ class RouteViewSet(GenericViewSet):
             qs = qs.order_by(*ordering)
 
         ser = RouteGeoSerializer(qs, many=True)
-        # serializer already returns FeatureCollection
+        # serializer already returns FeatureCollection-compatible items
         return Response(ser.data)
 
 
@@ -190,5 +190,5 @@ class NeighborhoodViewSet(GenericViewSet):
             qs = qs.order_by(*ordering)
 
         ser = NeighborhoodGeoSerializer(qs, many=True)
-        # serializer already returns FeatureCollection
+        # serializer already returns FeatureCollection-compatible items
         return Response(ser.data)
