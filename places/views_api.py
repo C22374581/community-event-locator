@@ -2,6 +2,7 @@
 from django.shortcuts import get_object_or_404
 from django.contrib.gis.geos import Point, Polygon
 from django.contrib.gis.measure import D
+
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -16,15 +17,25 @@ from .serializers import (
 
 """
 API layer for spatial data (Events, Routes, Neighborhoods).
-Implements GeoJSON endpoints with spatial queries using PostGIS + Django REST Framework.
-NOTE: Geo* serializers (DRF-GIS) already return proper GeoJSON, so we avoid double wrapping.
+GeoJSON endpoints with spatial queries using PostGIS + DRF-GIS.
+
+Endpoints you get:
+- /api/events/                     (paginated list + search + ordering + bbox)
+- /api/events/nearby/              (lat/lng + radius)
+- /api/events/in_neighborhood/     (neighborhood_id)
+- /api/events/along_route/         (route_id + buffer)
+- /api/events/stats/               (summary counts)
+
+- /api/routes/                     (GeoJSON FeatureCollection, no pagination)
+- /api/neighborhoods/              (GeoJSON FeatureCollection, no pagination)
 """
 
 # ------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------
+
 def _first_geom_attr(obj, candidates):
-    """Return the first geometry-like field that exists on the model."""
+    """Return the first geometry-like field on the model instance."""
     for name in candidates:
         if hasattr(obj, name):
             return getattr(obj, name)
@@ -32,34 +43,26 @@ def _first_geom_attr(obj, candidates):
         f"{obj.__class__.__name__} has none of {', '.join(candidates)}"
     )
 
-
-# ------------------------------------------------------------
-# Fallback field names for geometry lookup
-# ------------------------------------------------------------
+# Fallback field names for geometry lookup on your models
 EVENT_POINT_FIELD = ("location", "geom", "point")
 ROUTE_LINE_FIELDS = ("path", "line", "geom", "linestring", "geometry")
-HOOD_POLY_FIELDS = ("area", "polygon", "geom", "geometry", "boundary")
+HOOD_POLY_FIELDS  = ("area", "polygon", "geom", "geometry", "boundary")
 
 
 # ------------------------------------------------------------
 # Event API
 # ------------------------------------------------------------
+
 class EventViewSet(GenericViewSet):
     """
     API for listing and filtering Events with spatial queries.
-
-    Endpoints:
-    /api/events/                -> Paginated list (search + ordering + bbox)
-    /api/events/nearby/         -> Events within radius
-    /api/events/in_neighborhood/-> Events within neighborhood polygon
-    /api/events/along_route/    -> Events near a route (buffer)
-    /api/events/stats/          -> Summary statistics
     """
-
+    queryset = Event.objects.all()                # <-- fixes DRF AssertionError
+    serializer_class = EventGeoSerializer
     pagination_class = PageNumberPagination
 
     def list(self, request):
-        qs = Event.objects.all()
+        qs = self.get_queryset()
 
         # --- BBOX filter (?bbox=minLng,minLat,maxLng,maxLat)
         bbox = (request.GET.get("bbox") or "").strip()
@@ -69,14 +72,15 @@ class EventViewSet(GenericViewSet):
                 envelope = Polygon.from_bbox((min_lng, min_lat, max_lng, max_lat))
                 qs = qs.filter(**{f"{EVENT_POINT_FIELD[0]}__within": envelope})
             except Exception:
-                pass  # ignore invalid bbox input
+                # ignore invalid bbox input
+                pass
 
         # --- Text search (title or description)
         q = (request.GET.get("q") or "").strip()
         if q:
             qs = qs.filter(title__icontains=q) | qs.filter(description__icontains=q)
 
-        # --- Ordering (default newest first)
+        # --- Ordering (default newest first by 'when' if present)
         ordering = (request.GET.get("ordering") or "-when").strip()
         qs = qs.order_by(ordering)
 
@@ -85,7 +89,6 @@ class EventViewSet(GenericViewSet):
         ser = EventGeoSerializer(page or qs, many=True)
         if page is not None:
             return self.get_paginated_response(ser.data)
-
         return Response(ser.data)
 
     # --------------------------------------------------------
@@ -101,7 +104,9 @@ class EventViewSet(GenericViewSet):
             return Response({"error": "Invalid lat/lng/radius."}, status=400)
 
         pt = Point(lng, lat, srid=4326)
-        qs = Event.objects.filter(**{f"{EVENT_POINT_FIELD[0]}__distance_lte": (pt, D(m=radius))})
+        qs = self.get_queryset().filter(
+            **{f"{EVENT_POINT_FIELD[0]}__distance_lte": (pt, D(m=radius))}
+        )
         ser = EventGeoSerializer(qs, many=True)
         return Response(ser.data)
 
@@ -117,12 +122,14 @@ class EventViewSet(GenericViewSet):
         hood = get_object_or_404(Neighborhood, pk=hood_id)
         hood_geom = _first_geom_attr(hood, HOOD_POLY_FIELDS)
 
-        qs = Event.objects.filter(**{f"{EVENT_POINT_FIELD[0]}__within": hood_geom})
+        qs = self.get_queryset().filter(
+            **{f"{EVENT_POINT_FIELD[0]}__within": hood_geom}
+        )
         ser = EventGeoSerializer(qs, many=True)
         return Response(ser.data)
 
     # --------------------------------------------------------
-    # Along Route (with buffer)
+    # Along Route (buffer in meters)
     # --------------------------------------------------------
     @action(detail=False, methods=["get"])
     def along_route(self, request):
@@ -138,7 +145,10 @@ class EventViewSet(GenericViewSet):
         route = get_object_or_404(Route, pk=route_id)
         route_geom = _first_geom_attr(route, ROUTE_LINE_FIELDS)
 
-        qs = Event.objects.filter(**{f"{EVENT_POINT_FIELD[0]}__distance_lte": (route_geom, D(m=buffer_m))})
+        # server-side distance threshold to the route geometry
+        qs = self.get_queryset().filter(
+            **{f"{EVENT_POINT_FIELD[0]}__distance_lte": (route_geom, D(m=buffer_m))}
+        )
         ser = EventGeoSerializer(qs, many=True)
         return Response(ser.data)
 
@@ -147,9 +157,8 @@ class EventViewSet(GenericViewSet):
     # --------------------------------------------------------
     @action(detail=False, methods=["get"])
     def stats(self, request):
-        """Quick summary counts by neighborhood and route presence."""
-        total = Event.objects.count()
-        with_geo = Event.objects.exclude(location=None).count()
+        total = self.get_queryset().count()
+        with_geo = self.get_queryset().exclude(**{EVENT_POINT_FIELD[0]: None}).count()
         no_geo = total - with_geo
         return Response(
             {
@@ -163,11 +172,14 @@ class EventViewSet(GenericViewSet):
 # ------------------------------------------------------------
 # Route API
 # ------------------------------------------------------------
+
 class RouteViewSet(GenericViewSet):
     """Return routes as GeoJSON FeatureCollection (no pagination)."""
+    queryset = Route.objects.all()
+    serializer_class = RouteGeoSerializer
 
     def list(self, request):
-        qs = Route.objects.all()
+        qs = self.get_queryset()
         q = (request.GET.get("q") or "").strip()
         if q:
             qs = qs.filter(name__icontains=q)
@@ -182,11 +194,14 @@ class RouteViewSet(GenericViewSet):
 # ------------------------------------------------------------
 # Neighborhood API
 # ------------------------------------------------------------
+
 class NeighborhoodViewSet(GenericViewSet):
     """Return neighborhoods as GeoJSON FeatureCollection (no pagination)."""
+    queryset = Neighborhood.objects.all()
+    serializer_class = NeighborhoodGeoSerializer
 
     def list(self, request):
-        qs = Neighborhood.objects.all()
+        qs = self.get_queryset()
         q = (request.GET.get("q") or "").strip()
         if q:
             qs = qs.filter(name__icontains=q)
