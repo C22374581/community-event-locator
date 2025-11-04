@@ -28,3 +28,13 @@ local_lbsdb.sql
 .DS_Store
 .idea/
 .vscode/
+
+# secrets & dumps
+.env
+*.dump
+*.sql
+/staticfiles/
+media/
+__pycache__/
+*.pyc
+
