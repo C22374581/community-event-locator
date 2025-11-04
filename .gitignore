@@ -10,3 +10,21 @@ node_modules/
 
 # Local secrets
 .env
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Django
+/staticfiles/
+/media/
+/.env
+
+# Local DB exports
+local_lbsdb.dump
+local_lbsdb.sql
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

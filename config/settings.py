@@ -18,7 +18,22 @@ load_dotenv(BASE_DIR / ".env")
 # ---------------------------------------------------------------------
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-key-change-me")
 DEBUG = os.getenv("DEBUG", "True") == "True"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+
+# Allow typical local & container hostnames by default; override via .env
+ALLOWED_HOSTS = os.getenv(
+    "ALLOWED_HOSTS",
+    "127.0.0.1,localhost,0.0.0.0,web,nginx",
+).split(",")
+
+# CSRF trusted origins (needed when running behind nginx / different hosts)
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "CSRF_TRUSTED_ORIGINS",
+    "http://localhost,http://127.0.0.1,http://0.0.0.0,http://web,http://nginx",
+).split(",")
+
+# Tell Django we're behind a reverse proxy (safe to keep even without TLS yet)
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # ---------------------------------------------------------------------
 # Applications
@@ -36,7 +51,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "rest_framework_gis",
-    "drf_spectacular",         # Swagger / OpenAPI docs
+    "drf_spectacular",            # Swagger / OpenAPI docs
     "django_filters",
     "corsheaders",
 
@@ -48,7 +63,7 @@ INSTALLED_APPS = [
 # Middleware
 # ---------------------------------------------------------------------
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",  # must be before CommonMiddleware
+    "corsheaders.middleware.CorsMiddleware",   # must be before CommonMiddleware
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -93,11 +108,11 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
-        "NAME": os.getenv("DB_NAME", "lbsdb"),
-        "USER": os.getenv("DB_USER", "postgres"),
-        "PASSWORD": os.getenv("DB_PASSWORD", ""),
-        "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+        "NAME": os.getenv("POSTGRES_DB", "lbsdb"),
+        "USER": os.getenv("POSTGRES_USER", "postgres"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+        "HOST": os.getenv("POSTGRES_HOST", "db"),
+        "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
 }
 
@@ -108,7 +123,6 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 # ---------------------------------------------------------------------
@@ -144,6 +158,7 @@ REST_FRAMEWORK = {
         if DEBUG
         else ["rest_framework.renderers.JSONRenderer"]
     ),
+
     # Pagination
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 100,
@@ -157,7 +172,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
 
-    # Rate limiting (demo defaults)
+    # Rate Limiting (demo defaults)
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -180,6 +195,6 @@ SPECTACULAR_SETTINGS = {
 # ---------------------------------------------------------------------
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SESSION_COOKIE_SECURE = False  # set True in production
-CSRF_COOKIE_SECURE = False     # set True in production
+SESSION_COOKIE_SECURE = False   # set True in production
+CSRF_COOKIE_SECURE = False      # set True in production
 X_FRAME_OPTIONS = "DENY"
