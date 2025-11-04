@@ -97,3 +97,19 @@ pgadmin (optional, for DB admin)
 networks: frontend + backend, named volumes for data/static/media
 
 
+## Architecture
+
+
+flowchart LR
+  browser[Browser] --> nginx[Nginx Reverse Proxy]
+  nginx --> web[Django + DRF (Gunicorn)]
+  web --> db[(PostgreSQL + PostGIS)]
+  browser -->|Tiles| osm[OpenStreetMap]
+
+  subgraph Docker Networks
+    nginx --- web
+    web --- db
+  end
+
+
+
