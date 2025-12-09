@@ -634,10 +634,18 @@ BEGIN
             result_count INTEGER DEFAULT 0,
             execution_time_ms DOUBLE PRECISION,
             created_at TIMESTAMP WITH TIME ZONE,
-            user_id INTEGER REFERENCES auth_user(id) ON DELETE SET NULL
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE SET NULL,
+            ip_address VARCHAR(45)
         );
         CREATE INDEX places_spat_query_t_f0becc_idx ON places_spatialquerylog (query_type, created_at);
         CREATE INDEX places_spat_user_id_213699_idx ON places_spatialquerylog (user_id, created_at);
+    END IF;
+    
+    -- Add ip_address to SpatialQueryLog if table exists but column doesn't
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_spatialquerylog') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_spatialquerylog' AND column_name='ip_address') THEN
+            ALTER TABLE places_spatialquerylog ADD COLUMN ip_address VARCHAR(45);
+        END IF;
     END IF;
     
     -- Add foreign key constraints to Event table if they don't exist
