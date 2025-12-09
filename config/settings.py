@@ -22,7 +22,7 @@ DEBUG = os.getenv("DEBUG", "True") == "True"
 # Allow typical local & container hostnames by default; override via .env
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost,0.0.0.0,web,nginx",
+    "127.0.0.1,localhost,0.0.0.0,web,nginx,*.railway.app,community-event-locator-production.up.railway.app",
 ).split(",")
 
 # CSRF trusted origins (needed when running behind nginx / different hosts)
@@ -105,14 +105,25 @@ TEMPLATES = [
 # ---------------------------------------------------------------------
 # Database (PostGIS)
 # ---------------------------------------------------------------------
+# Database configuration with SSL support for Supabase
+db_host = os.getenv("POSTGRES_HOST", "db")
+db_options = {}
+
+# Supabase requires SSL connections
+if "supabase.co" in db_host:
+    db_options = {
+        "sslmode": "require",
+    }
+
 DATABASES = {
     "default": {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": os.getenv("POSTGRES_DB", "lbsdb"),
         "USER": os.getenv("POSTGRES_USER", "postgres"),
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
-        "HOST": os.getenv("POSTGRES_HOST", "db"),
+        "HOST": db_host,
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "OPTIONS": db_options,
     }
 }
 
