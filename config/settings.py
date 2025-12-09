@@ -20,10 +20,12 @@ SECRET_KEY = os.getenv("SECRET_KEY", "dev-key-change-me")
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 # Allow typical local & container hostnames by default; override via .env
-ALLOWED_HOSTS = os.getenv(
-    "ALLOWED_HOSTS",
-    "127.0.0.1,localhost,0.0.0.0,web,nginx,*.railway.app,community-event-locator-production.up.railway.app",
-).split(",")
+# ALLOWED_HOSTS - Railway domains need to be added
+_default_hosts = "127.0.0.1,localhost,0.0.0.0,web,nginx"
+_railway_host = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+if _railway_host:
+    _default_hosts += f",{_railway_host}"
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", _default_hosts).split(",")
 
 # CSRF trusted origins (needed when running behind nginx / different hosts)
 CSRF_TRUSTED_ORIGINS = os.getenv(
