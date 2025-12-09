@@ -107,11 +107,14 @@ echo "Checking if created_at column exists..."
 if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
     CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
     CREATED_AT_EXISTS=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_at'" 2>&1 || echo "0")
+    MIGRATION_0006_APPLIED=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" -tAc "SELECT 1 FROM django_migrations WHERE app='places' AND name='0006_complete_schema'" 2>&1 || echo "0")
 else
     CREATED_AT_EXISTS=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_at'" 2>&1 || echo "0")
+    MIGRATION_0006_APPLIED=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -tAc "SELECT 1 FROM django_migrations WHERE app='places' AND name='0006_complete_schema'" 2>&1 || echo "0")
 fi
-if echo "$CREATED_AT_EXISTS" | grep -q "1"; then
-    echo "*** created_at column EXISTS - FAKING migration 0007 NOW before running remaining migrations ***"
+# If created_at exists OR migration 0006 is applied, fake 0007 to prevent conflicts
+if echo "$CREATED_AT_EXISTS" | grep -q "1" || echo "$MIGRATION_0006_APPLIED" | grep -q "1"; then
+    echo "*** created_at exists OR 0006 applied - FAKING migration 0007 NOW to prevent conflict ***"
     python manage.py migrate places 0007 --fake --noinput 2>&1 || echo "Warning: Could not fake migration 0007"
 fi
 echo "=========================================="
