@@ -103,7 +103,8 @@ echo "=========================================="
 if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
     CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
     echo "Creating ALL missing tables and columns from migration 0007..."
-    PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" <<'EOSQL' 2>&1 || true
+    echo "This may take a moment..."
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" <<'EOSQL' 2>&1 | tee /tmp/create_tables.log
 -- Add ALL missing columns from migration 0007
 DO $$ 
 BEGIN
@@ -164,7 +165,8 @@ END $$;
 EOSQL
 else
     echo "Creating ALL missing tables and columns from migration 0007..."
-    PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" <<'EOSQL' 2>&1 || true
+    echo "This may take a moment..."
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" <<'EOSQL' 2>&1 | tee /tmp/create_tables.log
 -- Add ALL missing columns from migration 0007
 DO $$ 
 BEGIN
@@ -441,6 +443,14 @@ BEGIN
     END IF;
 END $$;
 EOSQL
+CREATE_EXIT=${PIPESTATUS[0]}
+if [ $CREATE_EXIT -ne 0 ]; then
+    echo "WARNING: Some SQL commands failed. Check /tmp/create_tables.log"
+    cat /tmp/create_tables.log | head -50
+    echo "... (showing first 50 lines)"
+else
+    echo "✓ All tables and columns created successfully"
+fi
 fi
 echo "Missing tables and fields check complete."
 
