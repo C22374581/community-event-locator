@@ -65,9 +65,9 @@ if echo "${POSTGRES_HOST}" | grep -q "supabase.co"; then
         sleep 2
     done
 else
-    until pg_isready -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" >/dev/null 2>&1; do
-        sleep 1
-    done
+until pg_isready -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" >/dev/null 2>&1; do
+  sleep 1
+done
 fi
 echo "Postgres is ready."
 
@@ -385,6 +385,59 @@ BEGIN
         );
         CREATE INDEX places_spat_query_t_f0becc_idx ON places_spatialquerylog (query_type, created_at);
         CREATE INDEX places_spat_user_id_213699_idx ON places_spatialquerylog (user_id, created_at);
+    END IF;
+    
+    -- Add foreign key constraints to Event table if they don't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_event_country_id_fk' AND table_name='places_event') THEN
+        ALTER TABLE places_event ADD CONSTRAINT places_event_country_id_fk FOREIGN KEY (country_id) REFERENCES places_country(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_event_organizer_id_fk' AND table_name='places_event') THEN
+        ALTER TABLE places_event ADD CONSTRAINT places_event_organizer_id_fk FOREIGN KEY (organizer_id) REFERENCES places_organizer(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_event_created_by_id_fk' AND table_name='places_event') THEN
+        ALTER TABLE places_event ADD CONSTRAINT places_event_created_by_id_fk FOREIGN KEY (created_by_id) REFERENCES auth_user(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_event_parent_event_id_fk' AND table_name='places_event') THEN
+        ALTER TABLE places_event ADD CONSTRAINT places_event_parent_event_id_fk FOREIGN KEY (parent_event_id) REFERENCES places_event(id) ON DELETE CASCADE;
+    END IF;
+    
+    -- Add indexes to Event table
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='places_even_country_722128_idx') THEN
+        CREATE INDEX places_even_country_722128_idx ON places_event (country_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='places_even_organiz_b4181e_idx') THEN
+        CREATE INDEX places_even_organiz_b4181e_idx ON places_event (organizer_id);
+    END IF;
+    
+    -- Add foreign key constraints to Route table if they don't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_route_country_id_fk' AND table_name='places_route') THEN
+        ALTER TABLE places_route ADD CONSTRAINT places_route_country_id_fk FOREIGN KEY (country_id) REFERENCES places_country(id) ON DELETE SET NULL;
+    END IF;
+    
+    -- Add foreign key constraints to Neighborhood table if they don't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_neighborhood_country_id_fk' AND table_name='places_neighborhood') THEN
+        ALTER TABLE places_neighborhood ADD CONSTRAINT places_neighborhood_country_id_fk FOREIGN KEY (country_id) REFERENCES places_country(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='places_neighborhood_region_id_fk' AND table_name='places_neighborhood') THEN
+        ALTER TABLE places_neighborhood ADD CONSTRAINT places_neighborhood_region_id_fk FOREIGN KEY (region_id) REFERENCES places_region(id) ON DELETE SET NULL;
+    END IF;
+    
+    -- Create many-to-many junction tables for UserProfile
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_userprofile_favorite_categories') THEN
+        CREATE TABLE places_userprofile_favorite_categories (
+            id BIGSERIAL PRIMARY KEY,
+            userprofile_id BIGINT REFERENCES places_userprofile(id) ON DELETE CASCADE,
+            eventcategory_id BIGINT REFERENCES places_eventcategory(id) ON DELETE CASCADE,
+            UNIQUE(userprofile_id, eventcategory_id)
+        );
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_userprofile_favorite_countries') THEN
+        CREATE TABLE places_userprofile_favorite_countries (
+            id BIGSERIAL PRIMARY KEY,
+            userprofile_id BIGINT REFERENCES places_userprofile(id) ON DELETE CASCADE,
+            country_id BIGINT REFERENCES places_country(id) ON DELETE CASCADE,
+            UNIQUE(userprofile_id, country_id)
+        );
     END IF;
 END $$;
 EOSQL
