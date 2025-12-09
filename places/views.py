@@ -136,19 +136,29 @@ def events_view(request):
     status, and date range.
     """
     try:
+        # First, try without select_related to see if basic query works
         events = Event.objects.all().order_by('-when')
-        # Safely select related fields - don't select neighborhood if description column doesn't exist
+        # Try to get count to verify data exists
+        event_count = events.count()
+        print(f"DEBUG: Found {event_count} events in database")
+        
+        # Safely select related fields - only if they exist
         try:
+            # Try with all relations
             events = events.select_related('category', 'organizer', 'country')
-        except Exception:
+        except Exception as e1:
+            print(f"DEBUG: select_related with all failed: {e1}")
             try:
-                events = events.select_related('category')
-            except:
-                pass
-        # Don't select neighborhood to avoid description column error
-        # events = events.select_related('neighborhood')  # Commented out to avoid description column error
+                # Try with just category
+                events = Event.objects.all().order_by('-when').select_related('category')
+            except Exception as e2:
+                print(f"DEBUG: select_related with category failed: {e2}")
+                # Just use basic query
+                events = Event.objects.all().order_by('-when')
     except Exception as e:
         print(f"Error loading events: {e}")
+        import traceback
+        traceback.print_exc()
         events = Event.objects.none()
     
     # Filtering
