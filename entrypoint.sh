@@ -93,46 +93,66 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Django setup - Run migrations up to 0006 first, then check for created_at
+# Django setup - Run migrations normally, handle created_at conflict if it occurs
 # -----------------------------------------------------------------------------
 echo "=========================================="
-echo "Running migrations up to 0006 first..."
-echo "=========================================="
-python manage.py migrate places 0006 --noinput 2>&1 || {
-    echo "Warning: Could not migrate to 0006, continuing anyway..."
-}
-
-echo "Checking if created_at column exists..."
-# Check if created_at column exists in places_event - if so, fake migration 0007
-if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
-    CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
-    CREATED_AT_EXISTS=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_at'" 2>&1 || echo "0")
-    MIGRATION_0006_APPLIED=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" -tAc "SELECT 1 FROM django_migrations WHERE app='places' AND name='0006_complete_schema'" 2>&1 || echo "0")
-else
-    CREATED_AT_EXISTS=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_at'" 2>&1 || echo "0")
-    MIGRATION_0006_APPLIED=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -tAc "SELECT 1 FROM django_migrations WHERE app='places' AND name='0006_complete_schema'" 2>&1 || echo "0")
-fi
-# If created_at exists OR migration 0006 is applied, fake 0007 to prevent conflicts
-if echo "$CREATED_AT_EXISTS" | grep -q "1" || echo "$MIGRATION_0006_APPLIED" | grep -q "1"; then
-    echo "*** created_at exists OR 0006 applied - FAKING migration 0007 NOW to prevent conflict ***"
-    python manage.py migrate places 0007 --fake --noinput 2>&1 || echo "Warning: Could not fake migration 0007"
-fi
+echo "Running migrations..."
 echo "=========================================="
 
-# Run remaining migrations (0007 should be faked if created_at exists)
-echo "Running remaining migrations..."
+# Run migrations - if created_at conflict occurs, handle it by manually adding missing fields
 python manage.py migrate --noinput 2>&1 | tee /tmp/migrate.log
 MIGRATE_EXIT=$?
 if [ $MIGRATE_EXIT -ne 0 ]; then
     if grep -q "column.*already exists\|DuplicateColumn\|created_at.*already exists" /tmp/migrate.log 2>/dev/null; then
-        echo "ERROR: Migration failed with duplicate column error (created_at)"
-        echo "Force faking migration 0007 and retrying..."
-        python manage.py migrate places 0007 --fake --noinput 2>/dev/null || true
-        echo "Retrying migrations after faking 0007..."
+        echo "WARNING: created_at conflict detected. Adding missing fields manually..."
+        # Add missing fields from migration 0007 that don't conflict
+        if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
+            CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
+            PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" <<EOF 2>&1 || true
+-- Add missing Event fields if they don't exist
+DO \$\$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='end_time') THEN
+        ALTER TABLE places_event ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='price') THEN
+        ALTER TABLE places_event ADD COLUMN price NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='capacity') THEN
+        ALTER TABLE places_event ADD COLUMN capacity INTEGER;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='recurring') THEN
+        ALTER TABLE places_event ADD COLUMN recurring BOOLEAN DEFAULT FALSE;
+    END IF;
+END \$\$;
+EOF
+        else
+            PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" <<EOF 2>&1 || true
+-- Add missing Event fields if they don't exist
+DO \$\$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='end_time') THEN
+        ALTER TABLE places_event ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='price') THEN
+        ALTER TABLE places_event ADD COLUMN price NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='capacity') THEN
+        ALTER TABLE places_event ADD COLUMN capacity INTEGER;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='recurring') THEN
+        ALTER TABLE places_event ADD COLUMN recurring BOOLEAN DEFAULT FALSE;
+    END IF;
+END \$\$;
+EOF
+        fi
+        echo "Marking migration 0007 as applied (faked) since we manually added the fields..."
+        python manage.py migrate places 0007 --fake --noinput 2>&1 || true
+        echo "Retrying remaining migrations..."
         python manage.py migrate --noinput 2>&1 | tee /tmp/migrate2.log
         MIGRATE2_EXIT=$?
         if [ $MIGRATE2_EXIT -ne 0 ]; then
-            echo "Migrations still failing after fake. Check logs:"
+            echo "Migrations still failing. Check logs:"
             cat /tmp/migrate2.log
             exit $MIGRATE2_EXIT
         fi
