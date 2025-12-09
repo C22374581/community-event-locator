@@ -99,14 +99,15 @@ echo "=========================================="
 echo "Checking and adding missing database fields/tables..."
 echo "=========================================="
 
-# Add ALL missing columns and tables from migration 0007 BEFORE running migrations
+# Add ALL missing columns from migration 0007 for Event, Route, and Neighborhood
 if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
     CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
-    echo "Adding ALL missing columns and tables from migration 0007..."
+    echo "Adding ALL missing columns from migration 0007..."
     PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" <<'EOSQL' 2>&1 || true
--- Add ALL missing Event fields
+-- Add ALL missing columns from migration 0007
 DO $$ 
 BEGIN
+    -- Event table columns
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='end_time') THEN
         ALTER TABLE places_event ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
     END IF;
@@ -130,15 +131,44 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_by_id') THEN
         ALTER TABLE places_event ADD COLUMN created_by_id INTEGER;
+    END IF;
+    
+    -- Route table columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='country_id') THEN
+        ALTER TABLE places_route ADD COLUMN country_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='elevation_gain') THEN
+        ALTER TABLE places_route ADD COLUMN elevation_gain INTEGER;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='estimated_duration_hours') THEN
+        ALTER TABLE places_route ADD COLUMN estimated_duration_hours DOUBLE PRECISION;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='created_at') THEN
+        ALTER TABLE places_route ADD COLUMN created_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='updated_at') THEN
+        ALTER TABLE places_route ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    -- Neighborhood table columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='country_id') THEN
+        ALTER TABLE places_neighborhood ADD COLUMN country_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='region_id') THEN
+        ALTER TABLE places_neighborhood ADD COLUMN region_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='description') THEN
+        ALTER TABLE places_neighborhood ADD COLUMN description TEXT;
     END IF;
 END $$;
 EOSQL
 else
-    echo "Adding ALL missing columns and tables from migration 0007..."
+    echo "Adding ALL missing columns from migration 0007..."
     PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" <<'EOSQL' 2>&1 || true
--- Add ALL missing Event fields
+-- Add ALL missing columns from migration 0007
 DO $$ 
 BEGIN
+    -- Event table columns
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='end_time') THEN
         ALTER TABLE places_event ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
     END IF;
@@ -162,6 +192,34 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_by_id') THEN
         ALTER TABLE places_event ADD COLUMN created_by_id INTEGER;
+    END IF;
+    
+    -- Route table columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='country_id') THEN
+        ALTER TABLE places_route ADD COLUMN country_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='elevation_gain') THEN
+        ALTER TABLE places_route ADD COLUMN elevation_gain INTEGER;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='estimated_duration_hours') THEN
+        ALTER TABLE places_route ADD COLUMN estimated_duration_hours DOUBLE PRECISION;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='created_at') THEN
+        ALTER TABLE places_route ADD COLUMN created_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_route' AND column_name='updated_at') THEN
+        ALTER TABLE places_route ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    -- Neighborhood table columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='country_id') THEN
+        ALTER TABLE places_neighborhood ADD COLUMN country_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='region_id') THEN
+        ALTER TABLE places_neighborhood ADD COLUMN region_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='description') THEN
+        ALTER TABLE places_neighborhood ADD COLUMN description TEXT;
     END IF;
 END $$;
 EOSQL
