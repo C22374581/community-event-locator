@@ -99,10 +99,10 @@ echo "=========================================="
 echo "Checking and adding missing database fields/tables..."
 echo "=========================================="
 
-# Add ALL missing columns from migration 0007 for Event, Route, and Neighborhood
+# Create ALL missing tables and columns from migration 0007
 if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
     CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
-    echo "Adding ALL missing columns from migration 0007..."
+    echo "Creating ALL missing tables and columns from migration 0007..."
     PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" <<'EOSQL' 2>&1 || true
 -- Add ALL missing columns from migration 0007
 DO $$ 
@@ -163,7 +163,7 @@ BEGIN
 END $$;
 EOSQL
 else
-    echo "Adding ALL missing columns from migration 0007..."
+    echo "Creating ALL missing tables and columns from migration 0007..."
     PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" <<'EOSQL' 2>&1 || true
 -- Add ALL missing columns from migration 0007
 DO $$ 
@@ -221,10 +221,175 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_neighborhood' AND column_name='description') THEN
         ALTER TABLE places_neighborhood ADD COLUMN description TEXT;
     END IF;
+    
+    -- Create Country table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_country') THEN
+        CREATE TABLE places_country (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(100) UNIQUE NOT NULL,
+            code VARCHAR(2) UNIQUE,
+            geometry geometry(MultiPolygon, 4326),
+            flag_emoji VARCHAR(10),
+            created_at TIMESTAMP WITH TIME ZONE
+        );
+        CREATE INDEX places_coun_geometr_dc69cb_gist ON places_country USING GIST (geometry);
+    END IF;
+    
+    -- Create Region table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_region') THEN
+        CREATE TABLE places_region (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(120) NOT NULL,
+            geometry geometry(MultiPolygon, 4326),
+            created_at TIMESTAMP WITH TIME ZONE,
+            country_id BIGINT REFERENCES places_country(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX places_region_name_country_unique ON places_region (name, country_id);
+        CREATE INDEX places_regi_geometr_8e7c5b_gist ON places_region USING GIST (geometry);
+    END IF;
+    
+    -- Create Organizer table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_organizer') THEN
+        CREATE TABLE places_organizer (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(200) NOT NULL,
+            email VARCHAR(254),
+            phone VARCHAR(20),
+            website TEXT,
+            description TEXT,
+            created_at TIMESTAMP WITH TIME ZONE,
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE SET NULL
+        );
+    END IF;
+    
+    -- Create RouteWaypoint table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_routewaypoint') THEN
+        CREATE TABLE places_routewaypoint (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            location geometry(Point, 4326) NOT NULL,
+            "order" INTEGER NOT NULL,
+            description TEXT,
+            elevation INTEGER,
+            route_id BIGINT REFERENCES places_route(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX places_routewaypoint_route_order_unique ON places_routewaypoint (route_id, "order");
+        CREATE INDEX places_rout_locatio_7bb5cb_gist ON places_routewaypoint USING GIST (location);
+    END IF;
+    
+    -- Create EventMedia table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_eventmedia') THEN
+        CREATE TABLE places_eventmedia (
+            id BIGSERIAL PRIMARY KEY,
+            media_type VARCHAR(20) NOT NULL,
+            url TEXT NOT NULL,
+            caption VARCHAR(200),
+            "order" INTEGER DEFAULT 0,
+            created_at TIMESTAMP WITH TIME ZONE,
+            event_id BIGINT REFERENCES places_event(id) ON DELETE CASCADE
+        );
+    END IF;
+    
+    -- Create EventAttendee table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_eventattendee') THEN
+        CREATE TABLE places_eventattendee (
+            id BIGSERIAL PRIMARY KEY,
+            status VARCHAR(20) DEFAULT 'registered',
+            registered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            event_id BIGINT REFERENCES places_event(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX places_eventattendee_event_user_unique ON places_eventattendee (event_id, user_id);
+        CREATE INDEX places_even_user_id_720750_idx ON places_eventattendee (user_id, status);
+        CREATE INDEX places_even_event_i_ff7fd1_idx ON places_eventattendee (event_id, status);
+    END IF;
+    
+    -- Create EventReview table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_eventreview') THEN
+        CREATE TABLE places_eventreview (
+            id BIGSERIAL PRIMARY KEY,
+            rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+            comment TEXT,
+            created_at TIMESTAMP WITH TIME ZONE,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            event_id BIGINT REFERENCES places_event(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX places_eventreview_event_user_unique ON places_eventreview (event_id, user_id);
+    END IF;
+    
+    -- Create UserProfile table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_userprofile') THEN
+        CREATE TABLE places_userprofile (
+            id BIGSERIAL PRIMARY KEY,
+            location geometry(Point, 4326),
+            user_id INTEGER UNIQUE REFERENCES auth_user(id) ON DELETE CASCADE
+        );
+        CREATE INDEX places_user_locatio_4d7448_gist ON places_userprofile USING GIST (location);
+    END IF;
+    
+    -- Create UserFavorite table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_userfavorite') THEN
+        CREATE TABLE places_userfavorite (
+            id BIGSERIAL PRIMARY KEY,
+            created_at TIMESTAMP WITH TIME ZONE,
+            event_id BIGINT REFERENCES places_event(id) ON DELETE CASCADE,
+            neighborhood_id BIGINT REFERENCES places_neighborhood(id) ON DELETE CASCADE,
+            route_id BIGINT REFERENCES places_route(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE,
+            CONSTRAINT one_content_type_only CHECK (
+                (event_id IS NOT NULL AND neighborhood_id IS NULL AND route_id IS NULL) OR
+                (event_id IS NULL AND neighborhood_id IS NOT NULL AND route_id IS NULL) OR
+                (event_id IS NULL AND neighborhood_id IS NULL AND route_id IS NOT NULL)
+            )
+        );
+        CREATE INDEX places_user_user_id_cc4f15_idx ON places_userfavorite (user_id, created_at);
+    END IF;
+    
+    -- Create TrailCompletion table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_trailcompletion') THEN
+        CREATE TABLE places_trailcompletion (
+            id BIGSERIAL PRIMARY KEY,
+            completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            notes TEXT,
+            route_id BIGINT REFERENCES places_route(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX places_trailcompletion_user_route_unique ON places_trailcompletion (user_id, route_id);
+    END IF;
+    
+    -- Create EventSeries table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_eventseries') THEN
+        CREATE TABLE places_eventseries (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(200) NOT NULL,
+            description TEXT,
+            frequency VARCHAR(20) NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE,
+            created_at TIMESTAMP WITH TIME ZONE,
+            organizer_id BIGINT REFERENCES places_organizer(id) ON DELETE CASCADE
+        );
+    END IF;
+    
+    -- Create SpatialQueryLog table if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_spatialquerylog') THEN
+        CREATE TABLE places_spatialquerylog (
+            id BIGSERIAL PRIMARY KEY,
+            query_type VARCHAR(50) NOT NULL,
+            parameters JSONB,
+            result_count INTEGER DEFAULT 0,
+            execution_time_ms DOUBLE PRECISION,
+            created_at TIMESTAMP WITH TIME ZONE,
+            user_id INTEGER REFERENCES auth_user(id) ON DELETE SET NULL
+        );
+        CREATE INDEX places_spat_query_t_f0becc_idx ON places_spatialquerylog (query_type, created_at);
+        CREATE INDEX places_spat_user_id_213699_idx ON places_spatialquerylog (user_id, created_at);
+    END IF;
 END $$;
 EOSQL
 fi
-echo "Missing fields check complete."
+echo "Missing tables and fields check complete."
 
 echo "=========================================="
 echo "Running migrations..."
