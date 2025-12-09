@@ -116,9 +116,8 @@ if "supabase.co" in db_host or "pooler.supabase.com" in db_host:
         "sslmode": "require",
         "options": "-c search_path=public",  # Set default schema to public
     }
-    # Also set it in the connection string for psycopg
-    import psycopg
-    # This will be handled by the connection options above
+else:
+    db_options = {}
 
 DATABASES = {
     "default": {
@@ -131,6 +130,19 @@ DATABASES = {
         "OPTIONS": db_options,
     }
 }
+
+# Force set search_path for Supabase pooler connections on every new connection
+if "pooler.supabase.com" in db_host:
+    from django.db.backends.postgresql.base import DatabaseWrapper
+    original_get_new_connection = DatabaseWrapper.get_new_connection
+    
+    def get_new_connection_with_schema(self, conn_params):
+        conn = original_get_new_connection(self, conn_params)
+        with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO public;")
+        return conn
+    
+    DatabaseWrapper.get_new_connection = get_new_connection_with_schema
 
 # ---------------------------------------------------------------------
 # Password validation
