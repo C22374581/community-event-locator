@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Events - World Walking Events{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/worldmapper-style.css' %}">
+<link rel="stylesheet" href="{% static 'css/events-features.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="hero-title" style="font-size: 2.5rem;" data-i18n="walking-events">Walking Events Worldwide</h1>
+      <p class="text-muted" data-i18n="discover-subtitle">Discover marathons, festivals, and cultural events from around the globe</p>
+    </div>
+    <a href="{% url 'map' %}" class="btn btn-worldmapper btn-worldmapper-primary" data-i18n="view-on-map">
+      <i class="bi bi-map"></i> View on Map
+    </a>
+  </div>
+
+  <!-- Feature Tools Bar -->
+  <div class="feature-tools-bar">
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button id="calendar-view-toggle" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-calendar"></i> Calendar View
+      </button>
+      <button id="price-comparison-btn" class="btn btn-sm btn-outline-info" data-i18n="price-comparison">
+        <i class="bi bi-tags"></i> Price Comparison
+      </button>
+      <button id="itinerary-builder-btn" class="btn btn-sm btn-outline-success" data-i18n="my-itinerary">
+        <i class="bi bi-journal-check"></i> My Itinerary
+      </button>
+      <button id="analytics-btn" class="btn btn-sm btn-outline-warning" data-i18n="analytics">
+        <i class="bi bi-graph-up"></i> Analytics
+      </button>
+    </div>
+  </div>
+
+  <!-- 1. Smart Event Calendar with Multiple Views -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title" data-i18n="event-calendar">Event Calendar</h5>
+      <div class="calendar-view-toggle mb-3">
+        <button class="btn btn-sm btn-outline-primary" onclick="setCalendarView('month')" data-i18n="month">Month</button>
+        <button class="btn btn-sm btn-outline-primary" onclick="setCalendarView('week')" data-i18n="week">Week</button>
+        <button class="btn btn-sm btn-outline-primary" onclick="setCalendarView('day')" data-i18n="day">Day</button>
+        <button class="btn btn-sm btn-outline-primary active" onclick="setCalendarView('list')" data-i18n="list">List</button>
+      </div>
+      <div id="event-calendar-container"></div>
+    </div>
+  </div>
+
+  <!-- 2. AI Recommendations -->
+  <div id="ai-recommendations" class="mb-4"></div>
+
+  <!-- Price Comparison Panel -->
+  <div id="price-comparison-panel" class="mb-4" style="display: none;"></div>
+
+  <!-- Itinerary Panel -->
+  <div id="itinerary-panel" style="display: none;"></div>
+
+  <!-- Analytics Panel -->
+  <div id="analytics-panel" class="mb-4" style="display: none;"></div>
+
+  <!-- Filters -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <label class="form-label" data-i18n="filter-by-category">Filter by Category</label>
+      <select class="form-select" onchange="window.location.href='?category='+this.value">
+        <option value="" data-i18n="all-categories">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if selected_category == cat.id %}selected{% endif %}>
+          {{ cat.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" data-i18n="filter-by-status">Filter by Status</label>
+      <select class="form-select" onchange="window.location.href='?status='+this.value">
+        <option value="" data-i18n="all-status">All Status</option>
+        <option value="active" {% if selected_status == 'active' %}selected{% endif %} data-i18n="active">Active</option>
+        <option value="upcoming" {% if upcoming_only %}selected{% endif %} data-i18n="upcoming">Upcoming Only</option>
+      </select>
+    </div>
+    <div class="col-md-4 d-flex align-items-end">
+      <a href="{% url 'map' %}" class="btn btn-worldmapper btn-worldmapper-secondary w-100" data-i18n="advanced-filters">
+        <i class="bi bi-funnel"></i> Advanced Filters
+      </a>
+    </div>
+  </div>
+
+  <!-- Events Grid -->
+  <div class="events-grid">
+    {% for event in events %}
+    <div class="event-card fade-in" data-event-id="{{ event.id }}" data-event-date="{{ event.when|date:'c' }}">
+      <div class="event-card-image" style="background: {% if event.category %}{{ event.category.color }}{% else %}var(--gradient-primary){% endif %};">
+        {% if event.category %}
+          <span style="font-size: 4rem;">{{ event.category.icon|default:"📍" }}</span>
+        {% else %}
+          <i class="bi bi-calendar-event" style="font-size: 4rem;"></i>
+        {% endif %}
+      </div>
+      <div class="p-3">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h5 class="mb-0">{{ event.title }}</h5>
+          {% if event.category %}
+          <span class="category-badge" style="background: {{ event.category.color }}20; border-color: {{ event.category.color }}40;">
+            {{ event.category.name }}
+          </span>
+          {% endif %}
+        </div>
+        <p class="text-muted small mb-2">{{ event.description|truncatewords:20|default:"No description available." }}</p>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <small class="text-muted">
+            <i class="bi bi-clock"></i> {{ event.when|date:"M d, Y H:i" }}
+          </small>
+          {% if event.status %}
+          <span class="badge bg-{% if event.status == 'active' %}success{% elif event.status == 'cancelled' %}danger{% else %}warning{% endif %}">
+            {{ event.get_status_display }}
+          </span>
+          {% endif %}
+        </div>
+        {% if event.tags %}
+        <div class="mb-2">
+          {% for tag in event.get_tags_list|slice:":3" %}
+          <span class="badge bg-secondary me-1">{{ tag }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="d-flex gap-2">
+          <a href="{% url 'map' %}?event={{ event.id }}" class="btn btn-sm btn-outline-primary flex-fill" data-i18n="view-on-map">
+            <i class="bi bi-map"></i> View on Map
+          </a>
+          {% if event.website_url %}
+          <a href="{{ event.website_url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-box-arrow-up-right"></i>
+          </a>
+          {% endif %}
+        </div>
+        <div class="event-card-actions">
+          <!-- Social buttons, reviews, reminders, etc. will be added by JavaScript -->
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+      <i class="bi bi-calendar-x" style="font-size: 4rem; color: var(--text-secondary);"></i>
+      <p class="text-muted mt-3" data-i18n="no-events-found">No events found. Try adjusting your filters.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Modals -->
+<div id="stream-modal"></div>
+<div id="reviews-modal"></div>
+
+<script>
+  function setCalendarView(view) {
+    const buttons = document.querySelectorAll('.calendar-view-toggle button');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    if (window.renderCalendarView) {
+      window.renderCalendarView(view);
+    }
+  }
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/events-features.js' %}"></script>
+<script>
+  // Make renderCalendarView globally available
+  window.renderCalendarView = function(view) {
+    if (window.currentView !== undefined) {
+      window.currentView = view;
+      // Trigger re-render
+      const container = document.getElementById('event-calendar-container');
+      if (container && window.renderCalendarView) {
+        // This will be handled by events-features.js
+      }
+    }
+  };
+</script>
+{% endblock %}

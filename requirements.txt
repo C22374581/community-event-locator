@@ -1,0 +1,38 @@
+# Django Core
+Django==5.2.7
+asgiref==3.10.0
+sqlparse==0.5.3
+
+# Django REST Framework
+djangorestframework==3.16.1
+djangorestframework-gis==1.2.0
+drf-spectacular==0.28.0
+
+# Database
+psycopg==3.2.10
+psycopg-binary==3.2.10
+
+# Django Extensions
+django-cors-headers==4.9.0
+django-filter==25.2
+python-dotenv==1.1.1
+
+# API Documentation
+PyYAML==6.0.3
+uritemplate==4.2.0
+
+# JSON Schema (for API validation)
+jsonschema==4.25.1
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==0.28.0
+
+# Utilities
+attrs==25.4.0
+inflection==0.5.1
+typing_extensions==4.15.0
+wheel==0.45.1
+
+# Production Server
+gunicorn==21.2.0
+

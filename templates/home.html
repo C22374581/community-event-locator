@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}World Walking Events - Discover Global Events & Trails{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/worldmapper-style.css' %}">
+<link rel="stylesheet" href="{% static 'css/home-features.css' %}">
+<!-- Three.js for 3D Globe -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+{% endblock %}
+
+{% block content %}
+<!-- 7. Smart Search with Autocomplete -->
+<section class="mb-5">
+  <div class="container">
+    <div class="smart-search-container">
+      <input 
+        type="text" 
+        id="smart-search" 
+        placeholder="Search events, trails, or locations..." 
+        data-i18n-placeholder="search-placeholder"
+        autocomplete="off"
+      >
+      <div id="search-autocomplete" class="d-none"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Video Background Hero Section -->
+<section id="video-hero" class="hero-worldmapper fade-in mb-5">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-8">
+        <h1 class="hero-title" data-i18n="discover-events">Discover Walking Events & Trails Worldwide</h1>
+        <p class="hero-subtitle" data-i18n="explore-subtitle">
+          Explore famous marathons, cultural festivals, and legendary walking trails from around the globe. 
+          From the Camino de Santiago to the Appalachian Trail, find your next adventure.
+        </p>
+        <div class="d-flex flex-wrap gap-3 mt-4">
+          <a href="{% url 'map' %}" class="btn btn-worldmapper btn-worldmapper-primary" data-i18n="explore-map">
+            <i class="bi bi-globe"></i> Explore World Map
+          </a>
+          <a href="{% url 'trails' %}" class="btn btn-worldmapper btn-worldmapper-secondary" data-i18n="browse-trails">
+            <i class="bi bi-signpost-split"></i> Browse Trails
+          </a>
+          <a href="{% url 'events' %}" class="btn btn-worldmapper btn-worldmapper-secondary" data-i18n="view-events">
+            <i class="bi bi-calendar-event"></i> View Events
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-4 mt-4 mt-lg-0">
+        <!-- 4. Interactive Stats Dashboard with Animations -->
+        <div class="row g-3">
+          <div class="col-6">
+            <div class="stats-card">
+              <div class="stats-number" data-target="{{ stats.events }}">0</div>
+              <div class="stats-label" data-i18n="events">Events</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="stats-card">
+              <div class="stats-number" data-target="{{ stats.routes }}">0</div>
+              <div class="stats-label" data-i18n="routes">Trails</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="stats-card">
+              <div class="stats-number" data-target="{{ stats.categories }}">0</div>
+              <div class="stats-label" data-i18n="categories">Categories</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="stats-card">
+              <div class="stats-number" data-target="{{ stats.neighborhoods }}">0</div>
+              <div class="stats-label" data-i18n="regions">Regions</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Live Event Countdown Timer -->
+{% if next_major_event %}
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="next-major-event">Next Major Event</h2>
+    <div class="text-center mb-3">
+      <h3>{{ next_major_event.title }}</h3>
+      <p class="text-muted">{{ next_major_event.when|date:"F d, Y" }}</p>
+    </div>
+    <div class="countdown-container">
+      <div class="countdown-timer" data-target-date="{{ next_major_event.when|date:'c' }}"></div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- 1. Interactive World Globe Visualization -->
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="explore-the-world">Explore the World</h2>
+    <div id="world-globe"></div>
+    <p class="text-center text-muted mt-3" data-i18n="globe-description">
+      Hover over countries to see event density. Click to explore that region on the map.
+    </p>
+  </div>
+</section>
+
+<!-- 8. Weather Integration Widget -->
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="current-weather">Current Weather</h2>
+    <div id="weather-widget" class="mx-auto" style="max-width: 400px;"></div>
+  </div>
+</section>
+
+<!-- 3. Personalized Event Recommendations Engine -->
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="events-you-might-like">Events You Might Like</h2>
+    <div id="event-recommendations"></div>
+  </div>
+</section>
+
+<!-- Featured Events Section -->
+{% if featured_events %}
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="upcoming-events">Upcoming Events</h2>
+    <div class="events-grid">
+      {% for event in featured_events %}
+      <div class="event-card fade-in">
+        <div class="event-card-image">
+          {% if event.category %}
+            <span style="font-size: 3rem;">{{ event.category.icon|default:"📍" }}</span>
+          {% else %}
+            <i class="bi bi-calendar-event" style="font-size: 3rem;"></i>
+          {% endif %}
+        </div>
+        <div class="p-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h5 class="mb-0">{{ event.title }}</h5>
+            {% if event.category %}
+            <span class="category-badge" style="background: {{ event.category.color }}20; border-color: {{ event.category.color }}40;">
+              {{ event.category.name }}
+            </span>
+            {% endif %}
+          </div>
+          <p class="text-muted small mb-2">{{ event.description|truncatewords:15 }}</p>
+          <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+              <i class="bi bi-clock"></i> {{ event.when|date:"M d, Y" }}
+            </small>
+            <a href="{% url 'map' %}?event={{ event.id }}" class="btn btn-sm btn-outline-primary" data-i18n="view-on-map">
+              View on Map
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-center mt-4">
+      <a href="{% url 'events' %}" class="btn btn-worldmapper btn-worldmapper-secondary" data-i18n="view-all-events">
+        View All Events <i class="bi bi-arrow-right"></i>
+      </a>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- Featured Trails Section -->
+{% if featured_trails %}
+<section class="featured-section mb-5" style="background: var(--surface); padding: 4rem 0; border-radius: 24px;">
+  <div class="container">
+    <h2 class="section-title" data-i18n="famous-walking-trails">Famous Walking Trails</h2>
+    <div class="trails-grid">
+      {% for trail in featured_trails %}
+      <div class="trail-card fade-in">
+        <div class="trail-card-header">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h5 class="mb-0">{{ trail.name }}</h5>
+            {% if trail.difficulty %}
+            <span class="trail-difficulty {{ trail.get_difficulty_display|lower }}">
+              {{ trail.get_difficulty_display }}
+            </span>
+            {% endif %}
+          </div>
+          {% if trail.description %}
+          <p class="text-muted small mb-0">{{ trail.description|truncatewords:20 }}</p>
+          {% endif %}
+        </div>
+        <div class="p-3">
+          <div class="d-flex justify-content-between align-items-center">
+            {% if trail.distance_meters %}
+            <small class="text-muted">
+              <i class="bi bi-rulers"></i> 
+              {% if trail.distance_meters > 1000 %}
+                {{ trail.distance_meters|floatformat:0|add:"-1000"|floatformat:0|add:"1000"|floatformat:1 }} km
+              {% else %}
+                {{ trail.distance_meters|floatformat:0 }} m
+              {% endif %}
+            </small>
+            {% endif %}
+            <a href="{% url 'map' %}?trail={{ trail.id }}" class="btn btn-sm btn-outline-primary" data-i18n="view-trail">
+              View Trail
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-center mt-4">
+      <a href="{% url 'trails' %}" class="btn btn-worldmapper btn-worldmapper-secondary" data-i18n="explore-all-trails">
+        Explore All Trails <i class="bi bi-arrow-right"></i>
+      </a>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- 6. Social Proof & Testimonials Carousel -->
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="what-our-users-say">What Our Users Say</h2>
+    <div id="testimonials-carousel"></div>
+  </div>
+</section>
+
+<!-- 9. Gamification & Achievement System -->
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="your-achievements">Your Achievements</h2>
+    <div id="achievements"></div>
+  </div>
+</section>
+
+<!-- 10. Live Activity Feed -->
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="live-activity-feed">Live Activity Feed</h2>
+    <p class="text-muted text-center mb-3" data-i18n="live-activity-description">See what's happening right now in the community</p>
+    <div id="live-activity-feed"></div>
+  </div>
+</section>
+
+<!-- Categories Section -->
+{% if events_by_category %}
+<section class="featured-section mb-5">
+  <div class="container">
+    <h2 class="section-title" data-i18n="events-by-category">Events by Category</h2>
+    <div class="row g-3">
+      {% for category, count in events_by_category.items %}
+      <div class="col-md-4 col-lg-3">
+        <a href="{% url 'events' %}?category={{ category.id }}" class="text-decoration-none">
+          <div class="feature-card text-center">
+            <div class="feature-icon mx-auto">
+              {{ category.icon|default:"📍" }}
+            </div>
+            <h5 class="mb-1">{{ category.name }}</h5>
+            <p class="text-muted small mb-0">{{ count }} event{{ count|pluralize }}</p>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- Features Section -->
+<section class="featured-section" style="background: var(--surface); padding: 4rem 0; border-radius: 24px;">
+  <div class="container">
+    <h2 class="section-title">Explore the World</h2>
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="feature-card text-center">
+          <div class="feature-icon mx-auto">
+            <i class="bi bi-globe-americas"></i>
+          </div>
+          <h5 data-i18n="global-coverage">Global Coverage</h5>
+          <p class="text-muted" data-i18n="global-coverage-desc">Events and trails from every continent. Explore famous marathons, cultural festivals, and legendary walking routes worldwide.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-card text-center">
+          <div class="feature-icon mx-auto">
+            <i class="bi bi-map"></i>
+          </div>
+          <h5 data-i18n="interactive-maps">Interactive Maps</h5>
+          <p class="text-muted" data-i18n="spatial-queries-desc">Powerful spatial queries let you find events by location, distance, routes, and custom areas. Powered by PostGIS.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-card text-center">
+          <div class="feature-icon mx-auto">
+            <i class="bi bi-phone"></i>
+          </div>
+          <h5 data-i18n="works-offline">Works Offline</h5>
+          <p class="text-muted" data-i18n="progressive-web-app-desc">Progressive Web App that works offline. Install on your device and explore events even without internet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/home-features.js' %}"></script>
+{% endblock %}

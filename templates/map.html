@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Map – Community Event Locator{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+<link rel="stylesheet" href="{% static 'css/worldmapper-style.css' %}">
+<link rel="stylesheet" href="{% static 'css/map-advanced-features.css' %}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<!-- Marker Clustering -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<!-- Leaflet Draw -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<style>
+  .world-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .world-region-btn {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f1f5f9;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  .world-region-btn:hover {
+    background: rgba(30, 41, 59, 0.95);
+    transform: translateX(-4px);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0" style="height: calc(100vh - 80px);">
+  <div class="row g-0" style="height: 100%;">
+
+    <!-- Sidebar controls -->
+    <aside class="col-12 col-lg-3" style="overflow-y: auto; max-height: 100%; background: var(--surface); padding: 1rem; border-right: 1px solid var(--border);">
+
+      <!-- Nearby -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title" data-i18n="nearby">Nearby</h6>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label for="lat" class="form-label form-label-sm" data-i18n="latitude">Latitude</label>
+              <input id="lat" name="lat" type="number" step="any"
+                     inputmode="decimal" autocomplete="off"
+                     class="form-control form-control-sm">
+            </div>
+            <div class="col-6">
+              <label for="lng" class="form-label form-label-sm" data-i18n="longitude">Longitude</label>
+              <input id="lng" name="lng" type="number" step="any"
+                     inputmode="decimal" autocomplete="off"
+                     class="form-control form-control-sm">
+            </div>
+            <div class="col-12">
+              <label for="radius" class="form-label form-label-sm d-flex justify-content-between">
+                <span data-i18n="radius-m">Radius (m)</span><span id="radiusValue" class="text-muted">—</span>
+              </label>
+              <input id="radius" name="radius" type="range" min="50" max="2000" step="10"
+                     class="form-range" aria-describedby="radiusValue">
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button id="btnNearby" type="button" class="btn btn-primary btn-sm flex-fill" data-i18n="find-nearby">Find nearby</button>
+              <button id="btnReset"  type="button" class="btn btn-secondary btn-sm flex-fill" data-i18n="reset">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Neighborhood filter removed - no POIs loading -->
+
+      <!-- Along route -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title" data-i18n="along-route">Along route</h6>
+          <label for="routeId" class="form-label form-label-sm" data-i18n="route">Route</label>
+          <select id="routeId" name="route_id" class="form-select form-select-sm"></select>
+
+          <label for="buffer" class="form-label form-label-sm d-flex justify-content-between mt-2">
+            <span data-i18n="buffer-m">Buffer (m)</span><span id="bufferValue" class="text-muted">—</span>
+          </label>
+          <input id="buffer" name="buffer" type="range" min="50" max="500" step="10"
+                 class="form-range" aria-describedby="bufferValue">
+
+          <div class="d-grid mt-2">
+            <button id="btnRoute" type="button" class="btn btn-outline-dark btn-sm" data-i18n="events-along-route">
+              Events along route
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Filters -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title" data-i18n="advanced-filters">Advanced Filters</h6>
+          
+          <label for="categoryFilter" class="form-label form-label-sm" data-i18n="category">Category</label>
+          <select id="categoryFilter" class="form-select form-select-sm">
+            <option value="" data-i18n="all-categories">All Categories</option>
+          </select>
+
+          <label for="statusFilter" class="form-label form-label-sm mt-2" data-i18n="status">Status</label>
+          <select id="statusFilter" class="form-select form-select-sm">
+            <option value="" data-i18n="all-status">All Status</option>
+            <option value="active" data-i18n="active">Active</option>
+            <option value="upcoming" data-i18n="upcoming">Upcoming Only</option>
+            <option value="today" data-i18n="today">Today Only</option>
+          </select>
+
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="enableClustering">
+            <label class="form-check-label form-label-sm" for="enableClustering" data-i18n="enable-clustering">
+              Enable Marker Clustering
+            </label>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="showPOI">
+            <label class="form-check-label form-label-sm" for="showPOI" data-i18n="points-of-interest">
+              Show Points of Interest
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map Layers -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title" data-i18n="map-layers">Map Layers</h6>
+          <div id="layerControl" class="small">
+            <!-- Layer control will be added here by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Features -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="card-title" data-i18n="advanced-features">Advanced Features</h6>
+          
+          <!-- 1. 3D Terrain -->
+          <div class="d-grid mb-2">
+            <button id="toggle-3d" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-mountains"></i> Switch to 3D
+            </button>
+          </div>
+          <div id="elevation-profile"></div>
+
+          <!-- 2. AR Trail Finder -->
+          <div class="d-grid mb-2">
+            <button id="ar-trail-finder" class="btn btn-sm btn-outline-info">
+              <i class="bi bi-camera-vr"></i> AR Trail Finder
+            </button>
+          </div>
+
+          <!-- 3. Weather Overlay -->
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="weather-overlay-toggle">
+            <label class="form-check-label form-label-sm" for="weather-overlay-toggle">
+              <i class="bi bi-cloud-sun"></i> Weather Overlay
+            </label>
+          </div>
+
+          <!-- 4. Difficulty Heat Map -->
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="difficulty-heatmap-toggle">
+            <label class="form-check-label form-label-sm" for="difficulty-heatmap-toggle">
+              <i class="bi bi-thermometer-half"></i> Difficulty Heat Map
+            </label>
+          </div>
+
+          <!-- 5. Collaborative Marking -->
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="collaborative-marking-toggle" checked>
+            <label class="form-check-label form-label-sm" for="collaborative-marking-toggle">
+              <i class="bi bi-pin-map"></i> Custom Markers
+            </label>
+          </div>
+
+          <!-- 6. Time-Lapse -->
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="timelapse-toggle">
+            <label class="form-check-label form-label-sm" for="timelapse-toggle">
+              <i class="bi bi-play-circle"></i> Time-Lapse Animation
+            </label>
+          </div>
+
+          <!-- 7. Offline Download -->
+          <div class="d-grid mb-2">
+            <button id="download-offline" class="btn btn-sm btn-outline-success">
+              <i class="bi bi-download"></i> Download for Offline
+            </button>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="gps-tracking">
+            <label class="form-check-label form-label-sm" for="gps-tracking">
+              <i class="bi bi-geo-alt"></i> GPS Tracking
+            </label>
+          </div>
+
+          <!-- 8. Layer Comparison -->
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="layer-comparison-toggle">
+            <label class="form-check-label form-label-sm" for="layer-comparison-toggle">
+              <i class="bi bi-layers"></i> Compare Layers
+            </label>
+          </div>
+
+          <!-- 9. Route Planning -->
+          <div class="d-grid mb-2">
+            <button id="start-route-planning" class="btn btn-sm btn-outline-warning">
+              <i class="bi bi-signpost-split"></i> Start Route Planning
+            </button>
+          </div>
+
+          <!-- 10. Live Conditions -->
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="live-conditions-toggle">
+            <label class="form-check-label form-label-sm" for="live-conditions-toggle">
+              <i class="bi bi-info-circle"></i> Live Trail Conditions
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading stripe -->
+      <div id="loading" class="alert alert-info py-2 d-none" role="status" aria-live="polite">
+        <div class="d-inline-flex align-items-center gap-2">
+          <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+          <span>Loading…</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Map -->
+    <section class="col-12 col-lg-9 position-relative" style="padding: 0;">
+      <div id="map" style="height: 100%; width: 100%;"
+           role="application" aria-label="Interactive world map"></div>
+        
+        <!-- World Region Controls -->
+        <div class="world-controls">
+          <button class="world-region-btn" onclick="showRegionData('europe')" title="Show European landmarks and trails">
+            <i class="bi bi-globe-europe-africa"></i> Europe
+          </button>
+          <button class="world-region-btn" onclick="showRegionData('americas')" title="Show Americas landmarks and trails">
+            <i class="bi bi-globe-americas"></i> Americas
+          </button>
+          <button class="world-region-btn" onclick="showRegionData('asia')" title="Show Asian landmarks and trails">
+            <i class="bi bi-globe-asia-australia"></i> Asia
+          </button>
+          <button class="world-region-btn" onclick="showRegionData('oceania')" title="Show Oceania landmarks and trails">
+            <i class="bi bi-globe-asia-australia"></i> Oceania
+          </button>
+          <button class="world-region-btn" onclick="showAllData()" title="Show all landmarks and trails">
+            <i class="bi bi-globe"></i> Show All
+          </button>
+        </div>
+
+        <!-- Route Planning Panel -->
+        <div id="route-planning-panel">
+          <h6>Route Planning</h6>
+          <p class="small text-muted">Click on map to add waypoints</p>
+          <div id="route-stats"></div>
+        </div>
+
+        <!-- GPS Indicator -->
+        <div id="gps-indicator" class="gps-indicator">
+          <i class="bi bi-geo-alt-fill"></i> GPS Tracking Active
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- AR Overlay -->
+<div id="ar-overlay"></div>
+
+<!-- Toast -->
+<div id="toast" class="toast align-items-center text-bg-danger border-0 position-fixed bottom-0 end-0 m-3"
+     role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 1080;">
+  <div class="d-flex">
+    <div id="toast-body" class="toast-body">Message</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+  </div>
+</div>
+
+<noscript>
+  <div class="alert alert-warning m-3">This page requires JavaScript to load the map and data.</div>
+</noscript>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Marker Clustering -->
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<!-- Leaflet Draw -->
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<!-- Leaflet Heat (optional, has fallback) -->
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js" onerror="console.log('Heat plugin not available, using fallback')"></script>
+<!-- Main map script -->
+<script src="{% static 'js/map.js' %}" defer></script>
+<!-- OSM Overpass integration -->
+<script src="{% static 'js/osm-overpass.js' %}" defer></script>
+<!-- Advanced Map Features -->
+<script src="{% static 'js/map-advanced-features.js' %}" defer></script>
+<!-- World Navigation & Region Data -->
+<script>
+  // Region definitions with landmarks and trails
+  const REGIONS = {
+    europe: {
+      center: [50, 10],
+      zoom: 4,
+      bounds: [[35, -10], [72, 40]],
+      countries: ['IE', 'GB', 'FR', 'ES', 'DE', 'IT'],
+    },
+    americas: {
+      center: [40, -90],
+      zoom: 3,
+      bounds: [[10, -170], [70, -30]],
+      countries: ['US', 'PE'],
+    },
+    asia: {
+      center: [35, 100],
+      zoom: 3,
+      bounds: [[5, 70], [55, 150]],
+      countries: ['JP', 'CN'],
+    },
+    oceania: {
+      center: [-25, 135],
+      zoom: 3,
+      bounds: [[-50, 110], [0, 180]],
+      countries: ['AU', 'NZ'],
+    },
+  };
+
+  async function showRegionData(regionKey) {
+    if (!window.map || !REGIONS[regionKey]) return;
+    
+    const region = REGIONS[regionKey];
+    
+    // Fly to region - use setView instead of flyTo (Leaflet doesn't have flyTo by default)
+    window.map.setView(region.center, region.zoom, {
+      animate: true,
+      duration: 1.5
+    });
+    
+    // Filter and show events/routes for this region
+    try {
+      const eventsUrl = `/api/events/?page=1&page_size=200`;
+      const routesUrl = `/api/routes/`;
+      
+      const [eventsRes, routesRes] = await Promise.all([
+        fetch(eventsUrl).then(r => r.json()),
+        fetch(routesUrl).then(r => r.json()),
+      ]);
+      
+      // Filter by country codes
+      const regionEvents = (eventsRes.results || eventsRes).features?.filter(f => {
+        const country = f.properties?.country?.code;
+        return country && region.countries.includes(country);
+      }) || [];
+      
+      const regionRoutes = (routesRes.features || []).filter(f => {
+        const country = f.properties?.country?.code;
+        return country && region.countries.includes(country);
+      });
+      
+      // Update map layers
+      if (window.eventsLayer) {
+        window.eventsLayer.clearLayers();
+        if (regionEvents.length > 0) {
+          window.eventsLayer.addData({type: 'FeatureCollection', features: regionEvents});
+        }
+      }
+      
+      if (window.routesLayer) {
+        window.routesLayer.clearLayers();
+        if (regionRoutes.length > 0) {
+          window.routesLayer.addData({type: 'FeatureCollection', features: regionRoutes});
+        }
+      }
+      
+      // Fit bounds to show all
+      const allFeatures = [...regionEvents, ...regionRoutes];
+      if (allFeatures.length > 0) {
+        const group = L.featureGroup();
+        allFeatures.forEach(f => {
+          if (f.geometry) {
+            const layer = L.geoJSON(f);
+            group.addLayer(layer);
+          }
+        });
+        window.map.fitBounds(group.getBounds().pad(0.1));
+      }
+      
+      if (window.toast) {
+        window.toast(`Showing ${regionEvents.length} landmarks and ${regionRoutes.length} trails in ${regionKey}`, 'success');
+      }
+    } catch (e) {
+      console.error('Error loading region data:', e);
+      if (window.toast) {
+        window.toast('Error loading region data', 'danger');
+      }
+    }
+  }
+  
+  async function showAllData() {
+    if (!window.map) return;
+    
+    window.map.setView([20, 0], 2, {
+      animate: true,
+      duration: 1.5
+    });
+    
+    // Reload all data
+    if (window.loadBaseData) {
+      await window.loadBaseData();
+    }
+    
+    if (window.toast) {
+      window.toast('Showing all landmarks and trails worldwide', 'info');
+    }
+  }
+  
+  // Make functions globally available
+  window.showRegionData = showRegionData;
+  window.showAllData = showAllData;
+</script>
+{% endblock %}

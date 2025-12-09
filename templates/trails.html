@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Walking Trails - World Walking Events{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/worldmapper-style.css' %}">
+<link rel="stylesheet" href="{% static 'css/trails-features.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="hero-title" style="font-size: 2.5rem;" data-i18n="walking-trails">Walking Trails & Routes</h1>
+      <p class="text-muted" data-i18n="discover-trails">Discover famous walking trails and routes from around the world</p>
+    </div>
+    <a href="{% url 'map' %}" class="btn btn-worldmapper btn-worldmapper-primary" data-i18n="view-on-map">
+      <i class="bi bi-map"></i> View on Map
+    </a>
+  </div>
+
+  <!-- Feature Tools Bar -->
+  <div class="feature-tools-bar mb-4">
+    <div class="d-flex flex-wrap gap-2">
+      <button id="compare-trails-btn" class="btn btn-sm btn-outline-primary" disabled data-i18n="compare-trails">
+        <i class="bi bi-arrow-left-right"></i> <span data-i18n="compare">Compare</span> <span data-i18n-compare-count>(0/3)</span>
+      </button>
+      <button id="difficulty-calculator-btn" class="btn btn-sm btn-outline-info" data-i18n="difficulty-calculator">
+        <i class="bi bi-calculator"></i> Difficulty Calculator
+      </button>
+      <button id="group-planning-btn" class="btn btn-sm btn-outline-success" data-i18n="group-planning">
+        <i class="bi bi-people"></i> Group Planning
+      </button>
+      <button id="photo-gallery-btn" class="btn btn-sm btn-outline-warning" data-i18n="photo-gallery">
+        <i class="bi bi-images"></i> Photo Gallery
+      </button>
+    </div>
+  </div>
+
+  <!-- 8. Seasonal Trail Recommendations -->
+  <div id="seasonal-recommendations"></div>
+
+  <!-- Difficulty Calculator Panel -->
+  <div id="difficulty-calculator-panel" class="mb-4">
+    <h5 data-i18n="trail-difficulty-calculator">Trail Difficulty Calculator</h5>
+    <p class="text-muted small" data-i18n="find-trails-match">Find trails that match your fitness level</p>
+    <div class="difficulty-calculator-form">
+      <div>
+        <label class="form-label" data-i18n="fitness-level">Fitness Level</label>
+        <select id="fitness-level" class="form-select">
+          <option value="1" data-i18n="beginner">Beginner</option>
+          <option value="2" data-i18n="novice">Novice</option>
+          <option value="3" selected data-i18n="intermediate">Intermediate</option>
+          <option value="4" data-i18n="advanced">Advanced</option>
+          <option value="5" data-i18n="expert">Expert</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label" data-i18n="hiking-experience">Hiking Experience</label>
+        <select id="hiking-experience" class="form-select">
+          <option value="1" data-i18n="first-time">First time</option>
+          <option value="2" data-i18n="a-few-hikes">A few hikes</option>
+          <option value="3" selected data-i18n="regular-hiker">Regular hiker</option>
+          <option value="4" data-i18n="experienced">Experienced</option>
+          <option value="5" data-i18n="professional">Professional</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label" data-i18n="age">Age</label>
+        <input type="number" id="age" class="form-control" value="30" min="10" max="100">
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="health-conditions">
+        <label class="form-check-label" for="health-conditions" data-i18n="health-conditions">
+          I have health conditions that may affect hiking
+        </label>
+      </div>
+      <button id="calculate-difficulty" class="btn btn-primary" data-i18n="calculate">Calculate</button>
+      <div id="difficulty-result"></div>
+    </div>
+  </div>
+
+  <!-- Group Planning Panel -->
+  <div id="group-planning-panel" class="mb-4">
+    <h5 data-i18n="create-trail-group">Create Trail Group</h5>
+    <div class="group-form">
+      <div>
+        <label class="form-label" data-i18n="group-name">Group Name</label>
+        <input type="text" id="group-name" class="form-control" placeholder="My Trail Group" data-i18n-placeholder="my-trail-group">
+      </div>
+      <div>
+        <label class="form-label" data-i18n="select-trail">Select Trail</label>
+        <select id="selected-trail-for-group" class="form-select">
+          <option value="" data-i18n="choose-trail">Choose a trail...</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label" data-i18n="date">Date</label>
+        <input type="date" id="group-date" class="form-control">
+      </div>
+      <div>
+        <label class="form-label" data-i18n="invite-members">Invite Members (comma-separated emails)</label>
+        <input type="text" id="group-members" class="form-control" placeholder="friend1@email.com, friend2@email.com">
+      </div>
+      <button id="create-group-btn" class="btn btn-success" data-i18n="create-group">Create Group</button>
+    </div>
+  </div>
+
+  <!-- Photo Gallery Panel -->
+  <div id="photo-gallery-panel" class="mb-4"></div>
+
+  <!-- Trails by Difficulty -->
+  {% for difficulty, trails in trails_by_difficulty.items %}
+    {% if trails %}
+    <section class="mb-5">
+      <h3 class="mb-4" style="color: var(--text-primary);">
+        <span data-i18n-difficulty="{{ difficulty|lower }}">{{ difficulty }}</span> <span data-i18n="trails">Trails</span>
+        <span class="badge bg-secondary ms-2">{{ trails.count }}</span>
+      </h3>
+      <div class="trails-grid">
+        {% for trail in trails %}
+        <div class="trail-card fade-in" data-trail-id="{{ trail.id }}" data-difficulty="{{ trail.difficulty|default:3 }}">
+          <div class="trail-card-header">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="mb-0">{{ trail.name }}</h5>
+              <span class="trail-difficulty {{ difficulty|lower }}">
+                {{ difficulty }}
+              </span>
+            </div>
+            {% if trail.description %}
+            <p class="text-muted small mb-0">{{ trail.description }}</p>
+            {% endif %}
+          </div>
+          <div class="p-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                {% if trail.distance_meters %}
+                <small class="text-muted d-block">
+                  <i class="bi bi-rulers"></i> 
+                  {% if trail.distance_meters > 1000 %}
+                    <span data-i18n-distance-km>{{ trail.distance_meters|floatformat:0|add:"-1000"|floatformat:0|add:"1000"|floatformat:1 }} km</span>
+                  {% else %}
+                    <span data-i18n-distance-m>{{ trail.distance_meters|floatformat:0 }} m</span>
+                  {% endif %}
+                </small>
+                {% endif %}
+              </div>
+              <a href="{% url 'map' %}?trail={{ trail.id }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-map"></i> View on Map
+              </a>
+            </div>
+            <div class="trail-card-actions">
+              <!-- Buttons will be added by JavaScript -->
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  {% endfor %}
+
+  <!-- All Trails -->
+  {% if trails %}
+  <section>
+    <h3 class="mb-4" style="color: var(--text-primary);">All Trails</h3>
+    <div class="row g-3">
+      {% for trail in trails %}
+      <div class="col-md-6 col-lg-4">
+        <div class="trail-card" data-trail-id="{{ trail.id }}" data-difficulty="{{ trail.difficulty|default:3 }}">
+          <div class="trail-card-header">
+            <h6 class="mb-1">{{ trail.name }}</h6>
+            {% if trail.difficulty %}
+            <span class="trail-difficulty {{ trail.get_difficulty_display|lower }}">
+              {{ trail.get_difficulty_display }}
+            </span>
+            {% endif %}
+          </div>
+          <div class="p-3">
+            <a href="{% url 'map' %}?trail={{ trail.id }}" class="btn btn-sm btn-outline-primary w-100">
+              View on Map
+            </a>
+            <div class="trail-card-actions">
+              <!-- Buttons will be added by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<!-- Modals -->
+<div id="trail-comparison-panel"></div>
+<div id="360-preview-modal"></div>
+<div id="certificate-modal"></div>
+<div id="trail-story-modal"></div>
+<div id="safety-modal"></div>
+<div id="packing-list-modal"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/trails-features.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,36 @@
+QUICK START GUIDE
+==================
+
+1. Make sure Docker Desktop is running
+
+2. Extract the zip file and open terminal in the folder
+
+3. Create .env file:
+   Windows: Copy-Item .env.example .env
+   Linux/Mac: cp .env.example .env
+
+4. Start the app:
+   Windows: .\START_PROJECT.ps1
+   Linux/Mac: docker compose up --build
+
+5. Initialize database:
+   docker compose exec web python manage.py migrate
+   docker compose exec web python manage.py createsuperuser
+   docker compose exec web python manage.py seed_world_events
+
+6. Open browser:
+   http://localhost/
+
+TROUBLESHOOTING
+===============
+
+If Docker fails:
+- Check Docker Desktop is running
+- Check ports 80 and 5432 are free
+- View logs: docker compose logs -f
+
+If database errors:
+- Reset: docker compose down -v
+- Rebuild: docker compose up --build
+
+For more info see README.md

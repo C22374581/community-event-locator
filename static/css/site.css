@@ -1,0 +1,42 @@
+/* static/css/site.css - Enhanced with WorldMapper styling */
+:root {
+  --brand:#0ea5e9; /* sky-500 */
+}
+body { 
+  background:#0f172a; 
+  color:#f1f5f9; 
+  min-height: 100vh;
+}
+.navbar-brand { letter-spacing:.3px; }
+.hero {
+  background: radial-gradient(1200px 500px at 20% -10%, rgba(14,165,233,.30), transparent 60%),
+              radial-gradient(1100px 600px at 100% -50%, rgba(59,130,246,.25), transparent 60%);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:20px;
+  padding:3rem;
+}
+.card {
+  background:#1e293b;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  transition: all 0.3s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+footer { 
+  color:#94a3b8;
+  background: #0f172a;
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding: 2rem 0;
+  margin-top: 4rem;
+}
+.leaflet-container { 
+  border-radius:14px; 
+  border:1px solid rgba(255,255,255,.08); 
+}
+.badge-soft { 
+  background: rgba(14,165,233,.15); 
+  color:#bae6fd; 
+}

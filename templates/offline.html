@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Offline – Community Event Locator{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6 text-center">
+      <div class="mb-4">
+        <i class="bi bi-wifi-off" style="font-size: 4rem; color: #0dcaf0;"></i>
+      </div>
+      <h1 class="display-5 mb-3">You're Offline</h1>
+      <p class="lead text-secondary mb-4">
+        It looks like you don't have an internet connection right now.
+      </p>
+      <p class="text-muted mb-4">
+        Don't worry! You can still view previously loaded events and maps that have been cached.
+      </p>
+      <div class="d-flex gap-2 justify-content-center">
+        <a href="{% url 'map' %}" class="btn btn-info">
+          <i class="bi bi-map"></i> View Cached Map
+        </a>
+        <button onclick="window.location.reload()" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-clockwise"></i> Retry
+        </button>
+      </div>
+      <div class="mt-4">
+        <small class="text-muted">
+          <i class="bi bi-info-circle"></i>
+          The app will automatically sync when your connection is restored.
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
