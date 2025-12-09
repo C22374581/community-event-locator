@@ -80,10 +80,5 @@ urlpatterns = [
 ]
 
 # Serve static files (Railway doesn't use nginx, so Django must serve them)
-# Always serve - not just in DEBUG mode
-if settings.DEBUG or os.getenv("RAILWAY_ENVIRONMENT"):
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
-# Serve static files in production (Railway doesn't use nginx)
-if not settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# Always serve static files on Railway
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
