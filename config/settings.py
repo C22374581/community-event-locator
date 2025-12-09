@@ -116,6 +116,9 @@ if "supabase.co" in db_host or "pooler.supabase.com" in db_host:
         "sslmode": "require",
         "options": "-c search_path=public",  # Set default schema to public
     }
+    # Also set it in the connection string for psycopg
+    import psycopg
+    # This will be handled by the connection options above
 
 DATABASES = {
     "default": {

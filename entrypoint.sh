@@ -703,6 +703,20 @@ fi
 echo "Missing tables and fields check complete."
 
 echo "=========================================="
+echo "Setting PostgreSQL schema to public..."
+echo "=========================================="
+
+# Set search_path to public schema for Supabase pooler
+if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
+    CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" -c "SET search_path TO public;" 2>&1 || true
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>&1 || true
+else
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "SET search_path TO public;" 2>&1 || true
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>&1 || true
+fi
+
+echo "=========================================="
 echo "Running migrations..."
 echo "=========================================="
 
