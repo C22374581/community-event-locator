@@ -99,71 +99,69 @@ echo "=========================================="
 echo "Checking and adding missing database fields/tables..."
 echo "=========================================="
 
-# Add ALL missing Event fields from migration 0007 BEFORE running migrations
+# Add ALL missing columns and tables from migration 0007 BEFORE running migrations
 if echo "${POSTGRES_HOST}" | grep -q "supabase.co\|pooler.supabase.com"; then
     CONN_STRING="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
-    echo "Adding missing Event fields to database..."
+    echo "Adding ALL missing columns and tables from migration 0007..."
     PGPASSWORD="${POSTGRES_PASSWORD}" psql "${CONN_STRING}" <<'EOSQL' 2>&1 || true
--- Add ALL missing Event fields from migration 0007
+-- Add ALL missing Event fields
 DO $$ 
 BEGIN
-    -- end_time
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='end_time') THEN
         ALTER TABLE places_event ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
-        RAISE NOTICE 'Added end_time column';
     END IF;
-    -- price
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='price') THEN
         ALTER TABLE places_event ADD COLUMN price NUMERIC(10, 2) DEFAULT 0;
-        RAISE NOTICE 'Added price column';
     END IF;
-    -- capacity
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='capacity') THEN
         ALTER TABLE places_event ADD COLUMN capacity INTEGER;
-        RAISE NOTICE 'Added capacity column';
     END IF;
-    -- recurring
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='recurring') THEN
         ALTER TABLE places_event ADD COLUMN recurring BOOLEAN DEFAULT FALSE;
-        RAISE NOTICE 'Added recurring column';
     END IF;
-    -- parent_event_id (for self-referential foreign key)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='parent_event_id') THEN
         ALTER TABLE places_event ADD COLUMN parent_event_id BIGINT;
-        RAISE NOTICE 'Added parent_event_id column';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='country_id') THEN
+        ALTER TABLE places_event ADD COLUMN country_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='organizer_id') THEN
+        ALTER TABLE places_event ADD COLUMN organizer_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_by_id') THEN
+        ALTER TABLE places_event ADD COLUMN created_by_id INTEGER;
     END IF;
 END $$;
 EOSQL
 else
-    echo "Adding missing Event fields to database..."
+    echo "Adding ALL missing columns and tables from migration 0007..."
     PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" <<'EOSQL' 2>&1 || true
--- Add ALL missing Event fields from migration 0007
+-- Add ALL missing Event fields
 DO $$ 
 BEGIN
-    -- end_time
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='end_time') THEN
         ALTER TABLE places_event ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
-        RAISE NOTICE 'Added end_time column';
     END IF;
-    -- price
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='price') THEN
         ALTER TABLE places_event ADD COLUMN price NUMERIC(10, 2) DEFAULT 0;
-        RAISE NOTICE 'Added price column';
     END IF;
-    -- capacity
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='capacity') THEN
         ALTER TABLE places_event ADD COLUMN capacity INTEGER;
-        RAISE NOTICE 'Added capacity column';
     END IF;
-    -- recurring
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='recurring') THEN
         ALTER TABLE places_event ADD COLUMN recurring BOOLEAN DEFAULT FALSE;
-        RAISE NOTICE 'Added recurring column';
     END IF;
-    -- parent_event_id
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='parent_event_id') THEN
         ALTER TABLE places_event ADD COLUMN parent_event_id BIGINT;
-        RAISE NOTICE 'Added parent_event_id column';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='country_id') THEN
+        ALTER TABLE places_event ADD COLUMN country_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='organizer_id') THEN
+        ALTER TABLE places_event ADD COLUMN organizer_id BIGINT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_event' AND column_name='created_by_id') THEN
+        ALTER TABLE places_event ADD COLUMN created_by_id INTEGER;
     END IF;
 END $$;
 EOSQL
