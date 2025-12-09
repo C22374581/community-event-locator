@@ -111,9 +111,10 @@ db_host = os.getenv("POSTGRES_HOST", "db")
 db_options = {}
 
 # Supabase requires SSL connections
-if "supabase.co" in db_host:
+if "supabase.co" in db_host or "pooler.supabase.com" in db_host:
     db_options = {
         "sslmode": "require",
+        "options": "-c search_path=public",  # Set default schema to public
     }
 
 DATABASES = {
