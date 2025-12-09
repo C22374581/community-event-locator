@@ -144,15 +144,19 @@ BEGIN
             website TEXT,
             description TEXT,
             logo_url TEXT,
+            verified BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP WITH TIME ZONE,
             user_id INTEGER REFERENCES auth_user(id) ON DELETE SET NULL
         );
     END IF;
     
-    -- Add logo_url to Organizer if table exists but column doesn't
+    -- Add missing columns to Organizer if table exists but columns don't
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_organizer') THEN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_organizer' AND column_name='logo_url') THEN
             ALTER TABLE places_organizer ADD COLUMN logo_url TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_organizer' AND column_name='verified') THEN
+            ALTER TABLE places_organizer ADD COLUMN verified BOOLEAN DEFAULT FALSE;
         END IF;
     END IF;
     
@@ -491,9 +495,21 @@ BEGIN
             phone VARCHAR(20),
             website TEXT,
             description TEXT,
+            logo_url TEXT,
+            verified BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP WITH TIME ZONE,
             user_id INTEGER REFERENCES auth_user(id) ON DELETE SET NULL
         );
+    END IF;
+    
+    -- Add missing columns to Organizer if table exists but columns don't
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='places_organizer') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_organizer' AND column_name='logo_url') THEN
+            ALTER TABLE places_organizer ADD COLUMN logo_url TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='places_organizer' AND column_name='verified') THEN
+            ALTER TABLE places_organizer ADD COLUMN verified BOOLEAN DEFAULT FALSE;
+        END IF;
     END IF;
     
     -- Create RouteWaypoint table if it doesn't exist
